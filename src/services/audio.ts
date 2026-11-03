@@ -93,7 +93,7 @@ class AudioEngine {
         );
         bridge.updateState(
           this.currentTrack.title || 'LieMusic',
-          this.currentTrack.artist || 'Свободный стриминг',
+          this.currentTrack.artist || 'LieMusic',
           getHighResThumbnail(this.currentTrack.thumbnail) || '',
           isPlaying,
           posMs,

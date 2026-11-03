@@ -1,24 +1,29 @@
 import React from 'react';
 import { Home, Search, Library, DownloadCloud } from 'lucide-react';
+import { Language, translations } from '../i18n/translations';
 
 export type TabType = 'home' | 'search' | 'library' | 'offline';
 
 interface BottomNavProps {
   activeTab: TabType;
+  language: Language;
   onChangeTab: (tab: TabType) => void;
   accentColor: string;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
+  language,
   onChangeTab,
   accentColor,
 }) => {
+  const t = translations[language];
+
   const tabs = [
-    { id: 'home' as TabType, label: 'Главная', icon: Home },
-    { id: 'search' as TabType, label: 'Поиск', icon: Search },
-    { id: 'library' as TabType, label: 'Медиатека', icon: Library },
-    { id: 'offline' as TabType, label: 'Офлайн', icon: DownloadCloud },
+    { id: 'home' as TabType, label: t.tabHome, icon: Home },
+    { id: 'search' as TabType, label: t.tabSearch, icon: Search },
+    { id: 'library' as TabType, label: t.tabLibrary, icon: Library },
+    { id: 'offline' as TabType, label: t.tabOffline, icon: DownloadCloud },
   ];
 
   return (

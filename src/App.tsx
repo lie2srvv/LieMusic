@@ -16,7 +16,10 @@ import {
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { CellularDownloadModal } from './components/CellularDownloadModal';
 import { isCellularConnection } from './utils/network';
-import { Track, EqualizerPreset, AudioSource } from './types';
+import { Track, AudioSource } from './types';
+import { translations, Language } from './i18n/translations';
+import { LanguageSelectModal } from './components/LanguageSelectModal';
+import { DEFAULT_PRESETS } from './services/audio';
 import { extractPaletteFromImage, ExtractedPalette } from './utils/colorExtractor';
 import { audioEngine } from './services/audio';
 import { searchYouTubeTracks, resolveStreamUrl } from './services/youtube';
@@ -32,6 +35,17 @@ import { getHighResThumbnail } from './utils/thumbnail';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
+
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem('liemusic_language');
+    return (saved === 'en' || saved === 'ru') ? saved : 'ru';
+  });
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState<boolean>(() => {
+    return !localStorage.getItem('liemusic_language');
+  });
+  const [activePreset, setActivePreset] = useState<string>('flat');
+
+  const t = translations[language];
 
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -257,7 +271,7 @@ export const App: React.FC = () => {
       const downloadedItem: Track = {
         ...track,
         isDownloaded: true,
-        fileSize: sizeStr || '2.5 МБ',
+        fileSize: sizeStr || `2.5 ${t.mb}`, 
       };
 
       setDownloadedTracks((prev) => [downloadedItem, ...prev.filter((t) => t.id !== track.id)]);
@@ -278,6 +292,13 @@ export const App: React.FC = () => {
       return;
     }
     executeDownload(track);
+  };
+
+  const handleDownloadAllFavorites = () => {
+    const notDownloaded = favorites.filter((t) => !downloadedTrackIds.has(t.id));
+    if (notDownloaded.length > 0) {
+      requestDownloadMultiple(notDownloaded);
+    }
   };
 
   const requestDownloadMultiple = (tracksToDownload: Track[]) => {
@@ -363,7 +384,7 @@ export const App: React.FC = () => {
 
         const rawName = file.name.replace(/\.[^/.]+$/, '');
         let title = rawName;
-        let artist = 'Локальный файл';
+        let artist = t.localFile;
 
         if (rawName.includes(' - ')) {
           const parts = rawName.split(' - ');
@@ -398,12 +419,12 @@ export const App: React.FC = () => {
           id: trackId,
           title,
           artist,
-          album: 'Локальные треки',
+          album: t.localTracks,
           duration,
           thumbnail: '',
           source: 'local',
           isDownloaded: true,
-          fileSize: sizeStr || `${(file.size / (1024 * 1024)).toFixed(1)} МБ`,
+          fileSize: sizeStr || `${(file.size / (1024 * 1024)).toFixed(1)} ${t.mb}`,
         };
 
         setDownloadedTracks((prev) => [localTrack, ...prev.filter((t) => t.id !== localTrack.id)]);
@@ -488,15 +509,26 @@ export const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-base font-bold tracking-tight text-white leading-tight">LieMusic</h1>
-            <p className="text-[11px] text-neutral-400">Свободный стриминг музыки</p>
+            <p className="text-[11px] text-neutral-400">{t.appSubtitle}</p>
           </div>
         </div>
 
         <div className="flex items-center space-x-2">
           <button
+            onClick={() => {
+              const next = language === 'ru' ? 'en' : 'ru';
+              setLanguage(next);
+              localStorage.setItem('liemusic_language', next);
+            }}
+            className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-neutral-300 hover:text-white transition-all border border-white/5 cursor-pointer active:scale-95"
+            title={language === 'ru' ? 'Switch to English' : 'Переключить на русский'}
+          >
+            {language.toUpperCase()}
+          </button>
+          <button
             onClick={() => setIsEqualizerOpen(true)}
             className="w-9 h-9 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-all border border-white/5 cursor-pointer active:scale-95"
-            title="Эквалайзер"
+            title={t.equalizer}
           >
             <Sliders size={18} />
           </button>
@@ -514,7 +546,7 @@ export const App: React.FC = () => {
               className="flex items-center space-x-3 px-4 py-3 bg-[#1D1B1B] hover:bg-[#222020] border border-white/10 rounded-2xl cursor-pointer transition-all active:scale-[0.99] shadow-lg"
             >
               <Search size={18} className="text-neutral-400" />
-              <span className="text-sm text-neutral-400">Найти трек, артиста или альбом...</span>
+              <span className="text-sm text-neutral-400">{t.searchPlaceholder}</span>
             </div>
 
             {/* Quick Access Tiles: Favorites & Offline */}
@@ -539,8 +571,8 @@ export const App: React.FC = () => {
                     </button>
                   )}
                 </div>
-                <h3 className="font-bold text-sm text-white">Любимые треки</h3>
-                <p className="text-[11px] text-neutral-400 mt-0.5">{favorites.length} треков</p>
+                <h3 className="font-bold text-sm text-white">{t.favoriteTracks}</h3>
+                <p className="text-[11px] text-neutral-400 mt-0.5">{t.tracksCount(favorites.length)}</p>
               </div>
 
               <div
@@ -563,8 +595,8 @@ export const App: React.FC = () => {
                     </button>
                   )}
                 </div>
-                <h3 className="font-bold text-sm text-white">Офлайн музыка</h3>
-                <p className="text-[11px] text-neutral-400 mt-0.5">{downloadedTracks.length} скачано</p>
+                <h3 className="font-bold text-sm text-white">{t.offlineMusic}</h3>
+                <p className="text-[11px] text-neutral-400 mt-0.5">{t.downloadedCount(downloadedTracks.length)}</p>
               </div>
             </div>
 
@@ -573,14 +605,14 @@ export const App: React.FC = () => {
               <div className="flex items-center justify-between px-1">
                 <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center space-x-1.5">
                   <Clock size={14} />
-                  <span>Недавно слушали</span>
+                  <span>{t.recentlyPlayed}</span>
                 </span>
                 {history.length > 0 && (
                   <button
                     onClick={() => setActiveTab('library')}
                     className="text-[11px] text-neutral-400 hover:text-white"
                   >
-                    Все ({history.length})
+                    {t.allWithCount(history.length)}
                   </button>
                 )}
               </div>
@@ -590,6 +622,7 @@ export const App: React.FC = () => {
                   <>
                     {(isHomeHistoryExpanded ? history : history.slice(0, 3)).map((track) => (
                       <TrackListItem
+                        language={language}
                         key={`home_${track.id}`}
                         track={track}
                         isCurrent={currentTrack?.id === track.id}
@@ -609,14 +642,14 @@ export const App: React.FC = () => {
                         onClick={() => setIsHomeHistoryExpanded((prev) => !prev)}
                         className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
                       >
-                        <span>{isHomeHistoryExpanded ? 'Свернуть' : `Показать ещё (все ${history.length})`}</span>
+                        <span>{isHomeHistoryExpanded ? t.showLess : t.showMore(history.length)}</span>
                         {isHomeHistoryExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     )}
                   </>
                 ) : (
                   <div className="py-8 text-center text-neutral-500">
-                    <p className="text-xs">Вы еще не слушали треки</p>
+                    <p className="text-xs">{t.emptyRecent}</p>
                   </div>
                 )}
               </div>
@@ -633,7 +666,7 @@ export const App: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Поиск треков, артистов..."
+                placeholder={t.searchPlaceholder}
                 className="w-full bg-[#1D1B1B] border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all shadow-inner"
                 autoFocus
               />
@@ -642,7 +675,7 @@ export const App: React.FC = () => {
             {/* Source Switcher Pills */}
             <div className="flex items-center space-x-2">
               {[
-                { id: 'all', label: 'Все источники' },
+                { id: 'all', label: t.allSources },
                 { id: 'youtube', label: 'YouTube Music' },
                 { id: 'soundcloud', label: 'SoundCloud' },
               ].map((s) => (
@@ -668,11 +701,12 @@ export const App: React.FC = () => {
               {isSearching ? (
                 <div className="py-20 flex flex-col items-center justify-center space-y-3 text-neutral-400">
                   <Disc3 size={32} className="animate-spin text-neutral-500" />
-                  <p className="text-xs">Ищем аудиопотоки без серверов...</p>
+                  <p className="text-xs">{t.searching}</p>
                 </div>
               ) : searchResults.length > 0 ? (
                 searchResults.map((track) => (
                   <TrackListItem
+                        language={language}
                     key={track.id}
                     track={track}
                     isCurrent={currentTrack?.id === track.id}
@@ -689,13 +723,13 @@ export const App: React.FC = () => {
                 ))
               ) : searchQuery ? (
                 <div className="py-20 text-center text-neutral-500">
-                  <p className="text-sm">Ничего не найдено по запросу «{searchQuery}»</p>
+                  <p className="text-sm">{t.searchNoResults}</p>
                 </div>
               ) : (
                 <div className="py-20 text-center text-neutral-500 space-y-1">
-                  <p className="text-sm">Введите название песни или исполнителя</p>
+                  <p className="text-sm">{t.searchEmptyTitle}</p>
                   <p className="text-xs text-neutral-600">
-                    Поиск по открытым каталогам YouTube Music и SoundCloud
+                    {t.searchEmptyDesc}
                   </p>
                 </div>
               )}
@@ -711,54 +745,35 @@ export const App: React.FC = () => {
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                   <Heart size={16} className="text-rose-500 fill-rose-500" />
-                  <span>Любимые треки ({favorites.length})</span>
+                  <span>{t.favoriteTracks} ({favorites.length})</span>
                 </h3>
                 {favorites.length > 0 && (
-                  <button
-                    onClick={() => handlePlayTrack(favorites[0], favorites)}
-                    className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer whitespace-nowrap"
-                  >
-                    Слушать все
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={handleDownloadAllFavorites}
+                      disabled={favorites.every((f) => downloadedTrackIds.has(f.id))}
+                      className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                      title={t.downloadAllTooltip}
+                    >
+                      <Download size={13} />
+                      <span>{t.downloadAll}</span>
+                    </button>
+                    <span className="text-neutral-600 text-xs">·</span>
+                    <button
+                      onClick={() => handlePlayTrack(favorites[0], favorites)}
+                      className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer whitespace-nowrap"
+                    >
+                      {t.playAll}
+                    </button>
+                  </div>
                 )}
               </div>
-
-              {/* Sub toolbar when expanded or has items */}
-              {favorites.length > 0 && isFavoritesExpanded && (
-                <div className="flex items-center space-x-2 px-1 overflow-x-auto whitespace-nowrap scrollbar-none py-0.5">
-                  <button
-                    onClick={() =>
-                      requestDownloadMultiple(
-                        favorites.filter((t) => !downloadedTrackIds.has(t.id))
-                      )
-                    }
-                    className="text-xs text-neutral-300 hover:text-emerald-400 flex items-center space-x-1.5 py-1.5 px-3 rounded-xl bg-white/5 border border-white/5 transition-colors cursor-pointer shrink-0"
-                    title="Скачать все в память"
-                  >
-                    <Download size={13} />
-                    <span>Скачать все</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsFavSelectMode((prev) => !prev);
-                      setSelectedFavIds(new Set());
-                    }}
-                    className={`text-xs py-1.5 px-3 rounded-xl border transition-all cursor-pointer font-medium shrink-0 ${
-                      isFavSelectMode
-                        ? 'bg-rose-500 text-white border-rose-500'
-                        : 'bg-white/5 border-white/5 text-neutral-300 hover:text-white'
-                    }`}
-                  >
-                    {isFavSelectMode ? 'Готово' : 'Выбрать'}
-                  </button>
-                </div>
-              )}
 
               {/* Selection action bar for Favorites */}
               {isFavSelectMode && favorites.length > 0 && (
                 <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/10 text-xs">
                   <span className="font-medium text-neutral-300">
-                    Выбрано: {selectedFavIds.size} из {favorites.length}
+                    {t.selected}: {selectedFavIds.size} {t.of} {favorites.length}
                   </span>
                   <div className="flex items-center space-x-2">
                     <button
@@ -771,7 +786,7 @@ export const App: React.FC = () => {
                       }}
                       className="text-neutral-400 hover:text-white px-2 py-1 rounded-lg bg-white/5 cursor-pointer"
                     >
-                      {selectedFavIds.size === favorites.length ? 'Снять всё' : 'Все'}
+                      {selectedFavIds.size === favorites.length ? t.deselectAll : t.all}
                     </button>
                     {selectedFavIds.size > 0 && (
                       <>
@@ -783,7 +798,7 @@ export const App: React.FC = () => {
                           className="text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
                         >
                           <Download size={13} />
-                          <span>Скачать ({selectedFavIds.size})</span>
+                          <span>{t.downloadCount(selectedFavIds.size)}</span>
                         </button>
                         <button
                           onClick={() => {
@@ -794,10 +809,19 @@ export const App: React.FC = () => {
                           className="text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
                         >
                           <Trash2 size={13} />
-                          <span>Убрать</span>
+                          <span>{t.remove}</span>
                         </button>
                       </>
                     )}
+                    <button
+                      onClick={() => {
+                        setIsFavSelectMode(false);
+                        setSelectedFavIds(new Set());
+                      }}
+                      className="text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg bg-white/10 cursor-pointer font-medium"
+                    >
+                      {t.done}
+                    </button>
                   </div>
                 </div>
               )}
@@ -807,6 +831,7 @@ export const App: React.FC = () => {
                   <>
                     {(isFavoritesExpanded ? favorites : favorites.slice(0, 3)).map((track) => (
                       <TrackListItem
+                        language={language}
                         key={`fav_${track.id}`}
                         track={track}
                         isCurrent={currentTrack?.id === track.id}
@@ -834,16 +859,16 @@ export const App: React.FC = () => {
                         onClick={() => setIsFavoritesExpanded((prev) => !prev)}
                         className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
                       >
-                        <span>{isFavoritesExpanded ? 'Свернуть' : `Показать все (${favorites.length})`}</span>
+                        <span>{isFavoritesExpanded ? t.showLess : t.showMore(favorites.length)}</span>
                         {isFavoritesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     )}
                   </>
                 ) : (
                   <div className="py-12 text-center text-neutral-500 space-y-1">
-                    <p className="text-xs">В любимых пока пусто</p>
+                    <p className="text-xs">{t.noFavoritesYet}</p>
                     <p className="text-[11px] text-neutral-600">
-                      Нажмите сердечко на любом треке, чтобы сохранить его
+                      {t.noFavoritesDesc}
                     </p>
                   </div>
                 )}
@@ -855,7 +880,7 @@ export const App: React.FC = () => {
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                   <Clock size={16} className="text-neutral-400" />
-                  <span>История прослушиваний ({history.length})</span>
+                  <span>{t.recentlyPlayed} ({history.length})</span>
                 </h3>
                 {history.length > 0 && (
                   <button
@@ -866,7 +891,7 @@ export const App: React.FC = () => {
                     className="text-xs text-neutral-400 hover:text-neutral-200 cursor-pointer flex items-center space-x-1"
                   >
                     <Trash2 size={13} />
-                    <span>Очистить</span>
+                    <span>{t.clear}</span>
                   </button>
                 )}
               </div>
@@ -876,6 +901,7 @@ export const App: React.FC = () => {
                   <>
                     {(isLibraryHistoryExpanded ? history : history.slice(0, 3)).map((track) => (
                       <TrackListItem
+                        language={language}
                         key={`lib_hist_${track.id}`}
                         track={track}
                         isCurrent={currentTrack?.id === track.id}
@@ -895,14 +921,14 @@ export const App: React.FC = () => {
                         onClick={() => setIsLibraryHistoryExpanded((prev) => !prev)}
                         className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
                       >
-                        <span>{isLibraryHistoryExpanded ? 'Свернуть' : `Показать ещё (все ${history.length})`}</span>
+                        <span>{isLibraryHistoryExpanded ? t.showLess : t.showMore(history.length)}</span>
                         {isLibraryHistoryExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     )}
                   </>
                 ) : (
                   <div className="py-12 text-center text-neutral-500">
-                    <p className="text-xs">История пуста</p>
+                    <p className="text-xs">{t.emptyRecent}</p>
                   </div>
                 )}
               </div>
@@ -920,9 +946,9 @@ export const App: React.FC = () => {
                     <DownloadCloud size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-white">Офлайн треки</h3>
+                    <h3 className="font-bold text-sm text-white">{t.offlineMusic}</h3>
                     <p className="text-[11px] text-neutral-300">
-                      Сохранено на устройстве ({downloadedTracks.length})
+                      {t.downloadedCount(downloadedTracks.length)}
                     </p>
                   </div>
                 </div>
@@ -931,10 +957,10 @@ export const App: React.FC = () => {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-medium text-xs flex items-center space-x-1 transition-all active:scale-95 cursor-pointer"
-                    title="Добавить трек с устройства"
+                    title={t.addTrackFromDevice}
                   >
                     <FolderPlus size={14} className="text-emerald-400" />
-                    <span>+ Файл</span>
+                    <span>+ {t.addFile}</span>
                   </button>
                   {downloadedTracks.length > 0 && (
                     <button
@@ -942,7 +968,7 @@ export const App: React.FC = () => {
                       className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center space-x-1 shadow transition-all active:scale-95 cursor-pointer"
                     >
                       <Play size={12} fill="currentColor" />
-                      <span>Слушать</span>
+                      <span>{t.playAll}</span>
                     </button>
                   )}
                 </div>
@@ -951,23 +977,11 @@ export const App: React.FC = () => {
               {downloadedTracks.length > 0 && (
                 <div className="flex items-center justify-between pt-1 border-t border-white/5">
                   <span className="text-[11px] text-neutral-400">
-                    {downloadedTracks.length} треков в памяти
+                    {t.storageCount(downloadedTracks.length)}
                   </span>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => {
-                        setIsOfflineSelectMode((prev) => !prev);
-                        setSelectedOfflineIds(new Set());
-                      }}
-                      className={`px-2.5 py-1 rounded-lg border transition-all text-[11px] font-semibold cursor-pointer ${
-                        isOfflineSelectMode
-                          ? 'bg-rose-500 text-white border-rose-500'
-                          : 'bg-white/5 border-white/10 text-neutral-300 hover:text-white'
-                      }`}
-                    >
-                      {isOfflineSelectMode ? 'Готово' : 'Выбрать'}
-                    </button>
-                  </div>
+                  <span className="text-[10px] text-neutral-500">
+                    {t.longPressToSelect}
+                  </span>
                 </div>
               )}
             </div>
@@ -976,7 +990,7 @@ export const App: React.FC = () => {
             {isOfflineSelectMode && downloadedTracks.length > 0 && (
               <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/10 text-xs">
                 <span className="font-medium text-neutral-300">
-                  Выбрано: {selectedOfflineIds.size} из {downloadedTracks.length}
+                  {t.selected}: {selectedOfflineIds.size} {t.of} {downloadedTracks.length}
                 </span>
                 <div className="flex items-center space-x-2">
                   <button
@@ -989,7 +1003,7 @@ export const App: React.FC = () => {
                     }}
                     className="text-neutral-400 hover:text-white px-2 py-1 rounded-lg bg-white/5 cursor-pointer"
                   >
-                    {selectedOfflineIds.size === downloadedTracks.length ? 'Снять всё' : 'Все'}
+                    {selectedOfflineIds.size === downloadedTracks.length ? t.deselectAll : t.all}
                   </button>
                   {selectedOfflineIds.size > 0 && (
                     <button
@@ -997,7 +1011,7 @@ export const App: React.FC = () => {
                       className="text-rose-400 hover:text-rose-300 px-3 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
                     >
                       <Trash2 size={13} />
-                      <span>Удалить ({selectedOfflineIds.size})</span>
+                      <span>{t.delete} ({selectedOfflineIds.size})</span>
                     </button>
                   )}
                 </div>
@@ -1008,6 +1022,7 @@ export const App: React.FC = () => {
               {downloadedTracks.length > 0 ? (
                 downloadedTracks.map((track) => (
                   <TrackListItem
+                        language={language}
                     key={`offline_${track.id}`}
                     track={track}
                     isCurrent={currentTrack?.id === track.id}
@@ -1032,9 +1047,9 @@ export const App: React.FC = () => {
               ) : (
                 <div className="py-16 text-center text-neutral-500 space-y-2">
                   <DownloadCloud size={36} className="mx-auto text-neutral-600 opacity-60" />
-                  <p className="text-xs font-medium">Нет скачанных треков</p>
+                  <p className="text-xs font-medium">{t.noDownloadedTracks}</p>
                   <p className="text-[11px] text-neutral-600 max-w-xs mx-auto">
-                    Лайкайте треки (сердечко), качайте из поиска или добавьте локальный файл кнопкой «+ Файл»!
+                    {t.noDownloadedTracksDesc}
                   </p>
                 </div>
               )}
@@ -1065,6 +1080,7 @@ export const App: React.FC = () => {
         <div className="pointer-events-auto">
           <BottomNav
             activeTab={activeTab}
+            language={language}
             onChangeTab={setActiveTab}
             accentColor={palette.accent}
           />
@@ -1079,6 +1095,7 @@ export const App: React.FC = () => {
         currentTime={currentTime}
         duration={duration}
         isFavorite={isCurrentFavorite}
+        language={language}
         isShuffle={isShuffle}
         isRepeat={isRepeat}
         isDownloading={currentTrack ? downloadingIds.has(currentTrack.id) : false}
@@ -1104,28 +1121,37 @@ export const App: React.FC = () => {
       <EqualizerModal
         isOpen={isEqualizerOpen}
         onClose={() => setIsEqualizerOpen(false)}
-        currentBands={equalizerBands}
+        equalizerBands={equalizerBands}
         bassBoost={bassBoost}
+        activePreset={activePreset}
         accentColor={palette.accent}
+        language={language}
         onBandChange={(idx, gain) => {
           const next = [...equalizerBands];
           next[idx] = gain;
           setEqualizerBands(next);
+          setActivePreset('');
           audioEngine.setBandGain(idx, gain);
         }}
         onBassBoostChange={(lvl) => {
           setBassBoost(lvl);
+          setActivePreset('');
           audioEngine.setBassBoost(lvl);
         }}
-        onSelectPreset={(preset: EqualizerPreset) => {
-          setEqualizerBands(preset.bands);
-          setBassBoost(preset.bassBoost || 0);
-          audioEngine.applyPreset(preset);
+        onSelectPreset={(presetId: string) => {
+          setActivePreset(presetId);
+          const preset = DEFAULT_PRESETS.find((p) => p.id === presetId);
+          if (preset) {
+            setEqualizerBands(preset.bands);
+            setBassBoost(preset.bassBoost || 0);
+            audioEngine.applyPreset(preset);
+          }
         }}
       />
 
       <ConfirmDeleteModal
         isOpen={!!deletePrompt}
+        language={language}
         count={deletePrompt?.trackIds.length || 0}
         trackTitle={deletePrompt?.trackTitle}
         onConfirm={(dontAskAgain) => {
@@ -1144,8 +1170,19 @@ export const App: React.FC = () => {
         onCancel={() => setDeletePrompt(null)}
       />
 
+      <LanguageSelectModal
+        isOpen={isLanguageModalOpen}
+        currentLanguage={language}
+        onSelectLanguage={(lang) => {
+          setLanguage(lang);
+          localStorage.setItem('liemusic_language', lang);
+        }}
+        onClose={() => setIsLanguageModalOpen(false)}
+      />
+
       <CellularDownloadModal
         isOpen={!!cellularPrompt}
+        language={language}
         count={cellularPrompt?.tracks.length || 1}
         onConfirm={(dontAskAgain) => {
           if (dontAskAgain) {

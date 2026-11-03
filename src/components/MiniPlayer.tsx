@@ -1,10 +1,12 @@
 import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Disc3 } from 'lucide-react';
 import { Track } from '../types';
+import { Language, translations } from '../i18n/translations';
 import { getHighResThumbnail } from '../utils/thumbnail';
 
 interface MiniPlayerProps {
   currentTrack: Track | null;
+  language?: Language;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -18,6 +20,7 @@ interface MiniPlayerProps {
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   currentTrack,
+  language = "ru",
   isPlaying,
   currentTime,
   duration,
@@ -29,6 +32,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   onOpenFullPlayer,
 }) => {
   if (!currentTrack) return null;
+  const t = translations[language];
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -88,7 +92,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           <button
             onClick={onPrev}
             className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-neutral-400 hover:text-white transition-transform active:scale-90 cursor-pointer"
-            title="Предыдущий трек"
+            title={t.prev}
           >
             <SkipBack size={18} />
           </button>
@@ -97,7 +101,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
             onClick={onTogglePlay}
             className="w-10 h-10 rounded-full shrink-0 aspect-square flex items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-md"
             style={{ backgroundColor: accentColor, color: '#151313' }}
-            title={isPlaying ? 'Пауза' : 'Играть'}
+            title={isPlaying ? t.pause : t.play}
           >
             {isPlaying ? (
               <Pause size={18} fill="#151313" />
@@ -109,7 +113,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           <button
             onClick={onNext}
             className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-neutral-400 hover:text-white transition-transform active:scale-90 cursor-pointer"
-            title="Следующий трек"
+            title={t.next}
           >
             <SkipForward size={18} />
           </button>

@@ -1,10 +1,12 @@
 import React, { useRef } from 'react';
 import { Play, Heart, Download, Trash2, Check, Loader2 } from 'lucide-react';
 import { Track } from '../types';
+import { Language, translations } from '../i18n/translations';
 import { getHighResThumbnail } from '../utils/thumbnail';
 
 interface TrackListItemProps {
   track: Track;
+  language?: Language;
   isCurrent: boolean;
   isPlaying: boolean;
   isFavorite: boolean;
@@ -24,6 +26,7 @@ interface TrackListItemProps {
 
 export const TrackListItem: React.FC<TrackListItemProps> = ({
   track,
+  language = "ru",
   isCurrent,
   isPlaying,
   isFavorite,
@@ -40,6 +43,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
   onSelect,
   onLongPress,
 }) => {
+  const t = translations[language];
   const isTrackDownloaded = isDownloaded ?? track.isDownloaded;
   const trackFileSize = fileSize ?? track.fileSize;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -195,7 +199,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
             className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
               isFavorite ? 'text-rose-500' : 'text-neutral-500 hover:text-neutral-300'
             }`}
-            title={isFavorite ? 'Удалить из избранного' : 'В избранное'}
+            title={isFavorite ? t.remove : t.addToFavorites}
           >
             <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
           </button>
@@ -203,7 +207,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           {isDownloading ? (
             <div
               className="p-2 rounded-xl text-amber-400 flex items-center justify-center animate-pulse"
-              title="Скачивание..."
+              title={t.downloading}
             >
               <Loader2 size={16} className="animate-spin text-amber-400" />
             </div>
@@ -211,7 +215,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
             <button
               onClick={onDeleteDownload}
               className="p-2 rounded-xl text-neutral-500 hover:text-rose-400 active:scale-90 transition-all cursor-pointer"
-              title="Удалить из памяти"
+              title={t.deleteFromDevice}
             >
               <Trash2 size={16} />
             </button>
@@ -221,7 +225,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
               className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
                 isTrackDownloaded ? 'text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
               }`}
-              title={isTrackDownloaded ? 'Скачано на устройство' : 'Скачать'}
+              title={isTrackDownloaded ? t.downloadedOffline : t.downloadTrack}
             >
               <Download size={16} />
             </button>

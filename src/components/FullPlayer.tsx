@@ -15,10 +15,12 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Track } from '../types';
+import { Language, translations } from '../i18n/translations';
 import { getHighResThumbnail } from '../utils/thumbnail';
 
 interface FullPlayerProps {
   isOpen: boolean;
+  language?: Language;
   onClose: () => void;
   track: Track | null;
   isPlaying: boolean;
@@ -46,6 +48,7 @@ interface FullPlayerProps {
 
 export const FullPlayer: React.FC<FullPlayerProps> = ({
   isOpen,
+  language = "ru",
   onClose,
   track,
   isPlaying,
@@ -69,6 +72,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   onDownloadTrack,
 }) => {
   if (!isOpen || !track) return null;
+  const t = translations[language];
 
   const formatTime = (secs: number) => {
     if (isNaN(secs)) return '0:00';
@@ -90,14 +94,14 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         <button
           onClick={onClose}
           className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer shadow-sm"
-          title="Свернуть"
+          title={t.collapse}
         >
           <ChevronDown size={22} />
         </button>
 
         <div className="text-center px-4">
           <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
-            СЕЙЧАС ИГРАЕТ
+            {t.nowPlaying}
           </p>
           <p className="text-xs font-semibold text-neutral-200 mt-0.5 truncate max-w-[180px]">
             {track.album || (track.source === 'youtube' ? 'YouTube Music' : 'SoundCloud')}
@@ -111,7 +115,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
               ? 'bg-rose-500/20 text-rose-500 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
               : 'bg-white/5 border-white/10 text-neutral-300 hover:text-white'
           }`}
-          title={isFavorite ? 'В избранном' : 'Добавить в избранное'}
+          title={isFavorite ? t.inFavorites : t.addToFavorites}
         >
           <Heart
             size={20}
@@ -187,7 +191,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             <button
               onClick={onOpenEqualizer}
               className="w-11 h-11 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer shadow-sm"
-              title="Эквалайзер"
+              title={t.equalizer}
             >
               <Sliders size={19} />
             </button>
@@ -202,7 +206,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
                   : 'bg-white/5 hover:bg-white/10 border-white/10 text-neutral-300 hover:text-white'
               }`}
-              title={isDownloading ? 'Скачивание трека...' : track.isDownloaded ? 'Скачано офлайн' : 'Скачать трек'}
+              title={isDownloading ? t.downloading : track.isDownloaded ? t.downloadedOffline : t.downloadTrack}
             >
               {isDownloading ? (
                 <Loader2 size={19} className="animate-spin text-amber-400" />
@@ -241,7 +245,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 ? 'text-white bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/50'
                 : 'text-neutral-400 hover:text-white'
             }`}
-            title="Перемешать"
+            title={t.shuffle}
           >
             <Shuffle size={22} className={isShuffle ? 'stroke-[2.5]' : ''} />
             {isShuffle && (
@@ -252,7 +256,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
           <button
             onClick={onPrev}
             className="p-3 text-neutral-200 hover:text-white transition-transform active:scale-90 cursor-pointer"
-            title="Предыдущий"
+            title={t.prev}
           >
             <SkipBack size={30} />
           </button>
@@ -265,7 +269,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
               color: '#151313',
               boxShadow: `0 12px 35px -4px ${glowColor}`,
             }}
-            title={isPlaying ? 'Пауза' : 'Играть'}
+            title={isPlaying ? t.pause : t.play}
           >
             {isPlaying ? (
               <Pause size={30} fill="#151313" />
@@ -277,7 +281,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
           <button
             onClick={onNext}
             className="p-3 text-neutral-200 hover:text-white transition-transform active:scale-90 cursor-pointer"
-            title="Следующий"
+            title={t.next}
           >
             <SkipForward size={30} />
           </button>
@@ -289,7 +293,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 ? 'text-white bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/50'
                 : 'text-neutral-400 hover:text-white'
             }`}
-            title="Повтор трека"
+            title={t.repeat}
           >
             <Repeat size={22} className={isRepeat ? 'stroke-[2.5]' : ''} />
             {isRepeat && (

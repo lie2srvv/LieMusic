@@ -27,11 +27,11 @@ body {
 
 /* Safe area padding for mobile notches and gesture bars */
 .safe-area-pt {
-  padding-top: max(env(safe-area-inset-top), 12px);
+  padding-top: max(env(safe-area-inset-top, 0px), 28px);
 }
 
 .safe-area-pb {
-  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 28px);
 }
 
 /* Custom vertical range slider for Equalizer */

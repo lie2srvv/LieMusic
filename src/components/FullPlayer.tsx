@@ -81,9 +81,11 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-between bg-[#131111]/98 backdrop-blur-3xl text-white px-6 pt-12 pb-10 transition-all duration-300 overflow-y-auto safe-area-pt safe-area-pb"
+      className="fixed inset-0 z-50 flex flex-col justify-between bg-[#131111]/98 backdrop-blur-3xl text-white px-6 transition-all duration-300 overflow-y-auto"
       style={{
         backgroundImage: `radial-gradient(circle at 50% 30%, ${glowColor} 0%, transparent 70%)`,
+        paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 28px) + 12px)',
+        paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 28px) + 36px)',
       }}
     >
       {/* Top Bar */}
@@ -117,9 +119,9 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
       </div>
 
       {/* Album Artwork & Visualizer */}
-      <div className="my-auto py-6 flex flex-col items-center justify-center max-w-sm mx-auto w-full">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center max-w-sm mx-auto w-full py-4">
         <div
-          className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-3xl overflow-hidden shadow-2xl transition-all duration-500 bg-neutral-900 border border-white/10"
+          className="relative w-60 h-60 sm:w-72 sm:h-72 aspect-square rounded-3xl overflow-hidden shadow-2xl transition-all duration-500 bg-neutral-900 border border-white/10"
           style={{
             boxShadow: `0 20px 50px -10px ${glowColor}`,
           }}
@@ -149,7 +151,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         </div>
 
         {/* Real-time Audio Spectrum Bars */}
-        <div className="w-full flex items-center justify-center space-x-1 h-8 mt-6 px-4">
+        <div className="w-full flex items-center justify-center space-x-1 h-8 mt-5 px-4">
           {Array.from(visualizerData.slice(0, 24)).map((val, idx) => {
             const heightPercent = isPlaying ? Math.max(12, (val / 255) * 100) : 10;
             return (
@@ -168,7 +170,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
       </div>
 
       {/* Bottom Controls Area */}
-      <div className="max-w-md mx-auto w-full shrink-0 space-y-4">
+      <div className="max-w-md mx-auto w-full shrink-0 space-y-4 pt-1">
         {/* Track Title, Artist & Pro Badges */}
         <div className="flex items-center justify-between">
           <div className="overflow-hidden flex-1 mr-4">
@@ -244,7 +246,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         </div>
 
         {/* Playback Controls Row */}
-        <div className="flex items-center justify-between pt-1 px-2">
+        <div className="flex items-center justify-between pt-2 px-2">
           <button
             onClick={onToggleShuffle}
             className={`p-2 rounded-full transition-colors cursor-pointer ${

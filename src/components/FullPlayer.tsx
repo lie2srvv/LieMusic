@@ -186,14 +186,6 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                   <Disc3 size={80} className="text-neutral-700 animate-spin" />
                 </div>
               )}
-
-              <div className="absolute top-3.5 left-3.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[9px] font-bold text-neutral-300 uppercase tracking-wider flex items-center space-x-1.5 shadow-md">
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: accentColor }}
-                />
-                <span>{track.source}</span>
-              </div>
             </motion.div>
 
             {/* Realtime Audio Visualizer Bars */}

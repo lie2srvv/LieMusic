@@ -20,7 +20,7 @@ import { FullPlayer } from './components/FullPlayer';
 import { EqualizerModal } from './components/EqualizerModal';
 import { TrackListItem } from './components/TrackListItem';
 import { invoke } from '@tauri-apps/api/core';
-import logoImg from './assets/logo.png';
+import { FoxLogo } from './components/FoxLogo';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
@@ -307,13 +307,16 @@ export const App: React.FC = () => {
       <header className="flex items-center justify-between px-5 pt-8 pb-3 bg-[#151313]/90 backdrop-blur-md border-b border-white/5 safe-area-pt shrink-0 z-20">
         <div className="flex items-center space-x-3">
           <div
-            className="w-10 h-10 rounded-2xl flex items-center justify-center p-1.5 shadow-lg transition-transform active:scale-95 border border-white/10"
+            className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg transition-transform active:scale-95 border border-white/10 shrink-0"
             style={{
               backgroundColor: '#1E1B1B',
-              boxShadow: `0 0 16px ${palette.glow}`,
+              boxShadow: `0 0 16px ${currentTrack ? palette.glow : 'rgba(249, 115, 22, 0.25)'}`,
             }}
           >
-            <img src={logoImg} alt="LieMusic" className="w-full h-full object-contain" />
+            <FoxLogo
+              className="w-7 h-7 transition-colors duration-500"
+              color={currentTrack ? palette.accent : '#F97316'}
+            />
           </div>
           <div>
             <h1 className="text-base font-bold tracking-tight text-white leading-tight">LieMusic</h1>

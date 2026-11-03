@@ -295,10 +295,8 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 type="button"
                 onClick={onToggleShuffle}
                 whileTap={{ scale: 0.85 }}
-                className={`relative p-3 rounded-full transition-all cursor-pointer flex items-center justify-center ${
-                  isShuffle
-                    ? 'text-white bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/50'
-                    : 'text-neutral-400 hover:text-white'
+                className={`relative p-3 rounded-full transition-colors cursor-pointer flex items-center justify-center ${
+                  isShuffle ? 'text-white' : 'text-neutral-500 hover:text-white'
                 }`}
                 title={t.shuffle}
               >
@@ -351,10 +349,8 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 type="button"
                 onClick={onToggleRepeat}
                 whileTap={{ scale: 0.85 }}
-                className={`relative p-3 rounded-full transition-all cursor-pointer flex items-center justify-center ${
-                  isRepeat
-                    ? 'text-white bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/50'
-                    : 'text-neutral-400 hover:text-white'
+                className={`relative p-3 rounded-full transition-colors cursor-pointer flex items-center justify-center ${
+                  isRepeat ? 'text-white' : 'text-neutral-500 hover:text-white'
                 }`}
                 title={t.repeat}
               >

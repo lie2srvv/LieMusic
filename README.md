@@ -4,7 +4,7 @@
 
 # LieMusic
 
-**Быстрый, стильный и лёгкий музыкальный плеер для Android с поддержкой YouTube Music, SoundCloud и офлайн-треков.**
+### Fast, elegant and lightweight open-source Android music player powered by YouTube Music, SoundCloud, and offline playback.
 
 [![Latest Release](https://img.shields.io/github/v/release/lie2srvv/LieMusic?style=for-the-badge&logo=github&color=10B981&labelColor=18181b)](https://github.com/lie2srvv/LieMusic/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android%20(ARM64%20%7C%20x86__64)-blue?style=for-the-badge&logo=android&logoColor=white&color=0ea5e9&labelColor=18181b)](https://github.com/lie2srvv/LieMusic/releases/latest)
@@ -14,7 +14,7 @@
 
 <br/>
 
-[📥 **Скачать последнюю версию (APK)**](https://github.com/lie2srvv/LieMusic/releases/latest) • [💬 **Связь с автором**](https://t.me/lie2srvv) • [☕ **Поддержать разработку**](https://yoomoney.ru/to/4100119666781214)
+[📥 **Download Latest APK**](https://github.com/lie2srvv/LieMusic/releases/latest) • [💬 **Developer / Telegram**](https://t.me/lie2srvv) • [☕ **Support Project**](https://yoomoney.ru/to/4100119666781214)
 
 <br/>
 
@@ -22,113 +22,113 @@
 
 ---
 
-## ⚡ О проекте
+## ✨ Overview
 
-**LieMusic** — современный открытый аудиоплеер для Android, сочетающий в себе доступ к миллионам треков через **YouTube Music** и **SoundCloud**, автономную офлайн-библиотеку и аудиофильский эквалайзер. 
+**LieMusic** is a modern, privacy-focused open-source music player built for Android. It combines seamless access to millions of tracks from **YouTube Music** and **SoundCloud**, an offline audio library, and an audiophile-grade 10-band equalizer.
 
-Проект разработан по концепции **Zero-Server / Local-First**: стриминг и загрузка происходят напрямую с открытых CDN без сторонних серверов-посредников, а ваши плейлисты, избранное, история и кэш остаются исключительно на вашем устройстве.
-
----
-
-## 🌟 Ключевые возможности
-
-- 🔍 **Универсальный стриминг & Поиск**: одновременный поиск и моментальное переключение между каталогами **YouTube Music** и **SoundCloud** с подсказками и умным дебаунсом.
-- 🎨 **Адаптивная палитра (Monet Dynamic Color)**: живое извлечение цветовой схемы из обложки текущего трека с мягким окружающим свечением (ambient glow) и адаптивным градиентом плеера.
-- 🎚️ **10-полосный эквалайзер & Bass Boost**: точная настройка полос (32 Hz – 16 kHz), усиление низких частот (Bass Boost), виртуализатор объёмного звучания и готовые аудиопресеты (*Rock, Pop, Electronic, Vocal, Flat*).
-- 📥 **Офлайн-библиотека**: скачивание треков в память устройства в один клик. Прослушивание без подключения к интернету, режим мультивыбора и пакетное управление локальными треками.
-- 🎧 **Нативный фоновый сервис Android**:
-  - Полноценная интеграция с **Android MediaSession** — отображение обложки, названия, артиста и прогресса в системной шторке и на экране блокировки.
-  - Управление воспроизведением с кнопок проводных и Bluetooth-наушников.
-  - Корректная обработка аудиофокуса (приостановка при звонках, уведомлениях и навигаторах).
-- 📱 **Edge-to-Edge & Gesture Navigation**: поддержка вырезов под фронтальную камеру (*punch-hole*) и системных жестов Android без наложения элементов управления.
-- 🔒 **Конфиденциальность и чистота**:
-  - 0 рекламных баннеров и навязчивых аудиовставок.
-  - 0 сбора телеметрии и аналитики.
-  - 0 обязательных учетных записей или подписок.
+Designed with a **Zero-Server / Local-First** philosophy: all streaming and downloading happens directly between your device and open content delivery networks without intermediate proxy servers. Your listening history, favorites, playlists, and offline cache remain strictly on your personal device.
 
 ---
 
-## 📸 Скриншоты интерфейса
+## 🚀 Key Features
+
+- 🔍 **Universal Streaming & Search**: Unified search across both **YouTube Music** and **SoundCloud** catalogs with live suggestions, fast debouncing, and one-tap source switching.
+- 🎨 **Adaptive Palette (Monet Dynamic Color)**: Real-time color extraction from active track artwork, casting a soft ambient glow and fluid gradient across the entire player.
+- 🎚️ **10-Band Equalizer & Bass Boost**: Precision frequency control (32 Hz – 16 kHz), Bass Boost, surround sound Virtualizer, and audio presets (*Rock, Pop, Electronic, Vocal, Flat*).
+- 📥 **Offline Audio Library**: Download any track to device storage in a single tap. Complete offline playback, multi-track selection, and batch library management without internet access.
+- 🎧 **Native Android Foreground Service**:
+  - Full **Android MediaSession** integration: persistent artwork, title, artist, seekbar progress in the notification shade and lock screen.
+  - Media button controls support for wired and Bluetooth headphones.
+  - Seamless audio focus handling (ducking/pausing during incoming calls, turn-by-turn navigation, and system notifications).
+- 📱 **Edge-to-Edge & Gesture Navigation**: Built with safe-area insets accommodating punch-hole camera cutouts and system navigation gesture bars without overlapping buttons.
+- 🔒 **Privacy-First & Clean**:
+  - Zero advertisement banners or audio interruptions.
+  - Zero telemetry, tracking, or analytical reporting.
+  - Zero mandatory accounts, logins, or paid subscription gates.
+
+---
+
+## 📸 Screenshots
 
 <div align="center">
 
-| Главный экран | Полноэкранный плеер | Поиск треков | 10-полосный эквалайзер |
-| :---: | :---: | :---: | :---: |
-| <img src="assets/screenshots/home.png" width="220" alt="Главная" /> | <img src="assets/screenshots/player.png" width="220" alt="Плеер" /> | <img src="assets/screenshots/search.png" width="220" alt="Поиск" /> | <img src="assets/screenshots/equalizer.png" width="220" alt="Эквалайзер" /> |
+| Home Screen | Fullscreen Player |
+| :---: | :---: |
+| <img src="assets/screenshots/home.png" width="280" alt="Home Screen" /> | <img src="assets/screenshots/player.png" width="280" alt="Fullscreen Player" /> |
 
 </div>
 
 ---
 
-## 📲 Скачать и установить
+## 📦 Download & Installation
 
-Готовые установочные пакеты доступны на вкладке **[Releases](https://github.com/lie2srvv/LieMusic/releases)**:
+Pre-built, ready-to-install Android packages are available directly from the **[Releases](https://github.com/lie2srvv/LieMusic/releases)** page:
 
-| Платформа | Формат | Архитектура | Ссылка |
+| Platform | Package Format | Architecture | Download Link |
 | :--- | :--- | :--- | :--- |
-| **Android** | `APK` | `Universal (arm64-v8a + x86_64)` | [**Скачать LieMusic.apk**](https://github.com/lie2srvv/LieMusic/releases/latest) |
+| **Android** | `APK` | `Universal (arm64-v8a + x86_64)` | [**Download LieMusic-v1.0.0.apk**](https://github.com/lie2srvv/LieMusic/releases/latest) |
 
 > [!NOTE]
-> При первой установке APK вне Google Play может потребоваться разрешение на установку из внешних источников в настройках безопасности Android.
+> When installing the APK manually outside of an app store, you may need to grant permission to "Install unknown apps" in your Android system security settings.
 
 ---
 
-## 🛠️ Стек технологий
+## 🛠️ Architecture & Tech Stack
 
-- **Ядро приложения**: [Tauri 2.0 Mobile](https://v2.tauri.app/) (Rust 2024, Android NDK).
-- **Фронтенд**: React 19, TypeScript, Vite.
-- **Стилизация & Анимации**: Tailwind CSS, Framer Motion, Lucide Icons.
-- **Аудиодвижок**: Web Audio API (BiquadFilter peaking filters, AnalyserNode, GainNode).
-- **Системные сервисы**: Android MediaSessionCompat, NotificationCompat, AudioManager.
+- **Core Engine**: [Tauri 2.0 Mobile](https://v2.tauri.app/) (Rust 2024, Android NDK).
+- **Frontend Layer**: React 19, TypeScript, Vite.
+- **Styling & Physics**: Tailwind CSS, Framer Motion, Lucide Icons.
+- **Audio Processing**: Web Audio API (peaking BiquadFilter bands, AnalyserNode, GainNode).
+- **Android Native Services**: Android MediaSessionCompat, NotificationCompat, AudioManager.
 
 ---
 
-## 🚀 Сборка из исходников
+## 🔨 Building from Source
 
-Если вы хотите собрать приложение самостоятельно:
+To compile LieMusic locally from source:
 
-### 1. Требования окружения
-- [Node.js](https://nodejs.org/) 20+ и [pnpm](https://pnpm.io/)
+### 1. Prerequisites
+- [Node.js](https://nodejs.org/) 20+ and [pnpm](https://pnpm.io/)
 - [Rust](https://rustup.rs/) (stable toolchain)
-- Android SDK (API 34+) и Android NDK (`r26+`)
-- Rust-таргеты:
+- Android SDK (API 34+) and Android NDK (`r26+` / `r28+`)
+- Rust Android targets:
   ```bash
   rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
   ```
 
-### 2. Клонирование и установка зависимостей
+### 2. Clone & Install Dependencies
 ```bash
 git clone https://github.com/lie2srvv/LieMusic.git
 cd LieMusic
 pnpm install
 ```
 
-### 3. Сборка APK для Android
+### 3. Build Android Universal Release APK
 ```bash
-# Экспорт пути к NDK (пример для Linux)
-export NDK_HOME=$HOME/Android/Sdk/ndk/<ваша_версия_ndk>
+# Export path to Android NDK
+export NDK_HOME=$HOME/Android/Sdk/ndk/<your_ndk_version>
 
-# Сборка универсального APK
+# Build signed universal release APK
 pnpm tauri android build --ci -t aarch64 x86_64 --apk
 ```
 
-Готовый файл APK будет находиться в:  
+The compiled package will be generated at:  
 `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`
 
 ---
 
-## 💳 Поддержка проекта
+## 💳 Support & Donations
 
-Разработка и поддержка приложения ведутся на чистом энтузиазме. Если вам нравится LieMusic, вы можете поддержать проект:
+Development and maintenance are carried out independently. If you enjoy using LieMusic and would like to support ongoing development:
 
-- ☕ **ЮMoney (банк. карты / кошелёк)**: [**4100119666781214**](https://yoomoney.ru/to/4100119666781214)
-- 💬 **Личная связь в Telegram**: [@lie2srvv](https://t.me/lie2srvv)
+- ☕ **YooMoney (Bank Card / Wallet)**: [**4100119666781214**](https://yoomoney.ru/to/4100119666781214)
+- 💬 **Direct Telegram**: [@lie2srvv](https://t.me/lie2srvv)
 
 ---
 
-## 📄 Лицензия
+## 📄 License
 
-Проект распространяется под открытой лицензией **MIT**. Подробности в файле [LICENSE](LICENSE).
+This project is licensed under the open-source **MIT License**. See the [LICENSE](LICENSE) file for complete details.
 
 <div align="center">
 <sub>Crafted with ❤️ by <a href="https://github.com/lie2srvv">lie2srvv</a>.</sub>

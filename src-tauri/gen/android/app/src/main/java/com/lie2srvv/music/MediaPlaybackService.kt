@@ -1,4 +1,4 @@
-package com.lie.liemusic
+package com.lie2srvv.music
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -27,11 +27,11 @@ class MediaPlaybackService : Service() {
         const val CHANNEL_ID = "liemusic_playback_channel"
         const val NOTIFICATION_ID = 24901
 
-        const val ACTION_UPDATE = "com.lie.liemusic.ACTION_UPDATE"
-        const val ACTION_TOGGLE = "com.lie.liemusic.ACTION_TOGGLE"
-        const val ACTION_NEXT = "com.lie.liemusic.ACTION_NEXT"
-        const val ACTION_PREV = "com.lie.liemusic.ACTION_PREV"
-        const val ACTION_STOP = "com.lie.liemusic.ACTION_STOP"
+        const val ACTION_UPDATE = "com.lie2srvv.music.ACTION_UPDATE"
+        const val ACTION_TOGGLE = "com.lie2srvv.music.ACTION_TOGGLE"
+        const val ACTION_NEXT = "com.lie2srvv.music.ACTION_NEXT"
+        const val ACTION_PREV = "com.lie2srvv.music.ACTION_PREV"
+        const val ACTION_STOP = "com.lie2srvv.music.ACTION_STOP"
 
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_ARTIST = "extra_artist"

@@ -8,6 +8,7 @@ import {
   Heart,
   Clock,
   Disc3,
+  TrendingUp,
 } from 'lucide-react';
 import { Track, UserProfile, EqualizerPreset, LyricsLine, AudioSource } from './types';
 import { extractPaletteFromImage, ExtractedPalette } from './utils/colorExtractor';
@@ -24,6 +25,7 @@ import { LyricsModal } from './components/LyricsModal';
 import { LiePayModal } from './components/LiePayModal';
 import { ProfileModal } from './components/ProfileModal';
 import { TrackListItem } from './components/TrackListItem';
+import { invoke } from '@tauri-apps/api/core';
 
 export const App: React.FC = () => {
   // Global Profile & Plan
@@ -252,27 +254,59 @@ export const App: React.FC = () => {
   };
 
   // Search logic
-  const handleSearch = async (query: string) => {
+  const handleSearch = async (query: string, sourceOverride?: AudioSource | 'all') => {
     setSearchQuery(query);
-    if (!query.trim()) {
+    const activeSource = sourceOverride || searchSource;
+    const clean = query.trim();
+    if (!clean) {
       setSearchResults([]);
       return;
     }
 
     setIsSearching(true);
     try {
+      const raw = await invoke<any[]>('search_music_native', {
+        query: clean,
+        sourceFilter: activeSource,
+      });
+
+      if (raw && Array.isArray(raw) && raw.length > 0) {
+        const mapped: Track[] = raw.map((item) => ({
+          id: item.id,
+          title: item.title,
+          artist: item.artist || (item.source === 'youtube' ? 'YouTube Music' : 'SoundCloud'),
+          album: item.album || (item.source === 'youtube' ? 'YouTube Music' : 'SoundCloud'),
+          duration: item.duration || 180,
+          thumbnail: item.thumbnail,
+          source: item.source as AudioSource,
+          streamUrl: item.streamUrl || item.stream_url,
+        }));
+        setSearchResults(mapped);
+      } else {
+        // Fallback to TS search services
+        let results: Track[] = [];
+        if (activeSource === 'youtube' || activeSource === 'all') {
+          const yt = await searchYouTubeTracks(clean);
+          results = [...results, ...yt];
+        }
+        if (activeSource === 'soundcloud' || activeSource === 'all') {
+          const sc = await searchSoundCloudTracks(clean);
+          results = [...results, ...sc];
+        }
+        setSearchResults(results);
+      }
+    } catch (err) {
+      console.warn('[LieMusic] Native search error:', err);
       let results: Track[] = [];
-      if (searchSource === 'youtube' || searchSource === 'all') {
-        const yt = await searchYouTubeTracks(query);
+      if (activeSource === 'youtube' || activeSource === 'all') {
+        const yt = await searchYouTubeTracks(clean);
         results = [...results, ...yt];
       }
-      if (searchSource === 'soundcloud' || searchSource === 'all') {
-        const sc = await searchSoundCloudTracks(query);
+      if (activeSource === 'soundcloud' || activeSource === 'all') {
+        const sc = await searchSoundCloudTracks(clean);
         results = [...results, ...sc];
       }
       setSearchResults(results);
-    } catch {
-      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -284,8 +318,8 @@ export const App: React.FC = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#151313] text-[#E7E1E1] overflow-hidden font-sans">
-      {/* Top Header / Status */}
-      <header className="px-4 py-3.5 flex items-center justify-between border-b border-white/5 bg-[#181616]/80 backdrop-blur-md shrink-0 safe-area-pt">
+      {/* Top Header with safe status bar padding */}
+      <header className="px-4 pt-11 pb-3 flex items-center justify-between border-b border-white/5 bg-[#181616]/90 backdrop-blur-md shrink-0 safe-area-pt">
         <div className="flex items-center space-x-2.5">
           <div
             className="w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm tracking-tighter shadow-md"
@@ -331,8 +365,8 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content View */}
-      <main className="flex-1 overflow-y-auto px-4 py-4 pb-32">
+      {/* Main Content View with generous bottom padding for bottom dock */}
+      <main className="flex-1 overflow-y-auto px-4 py-4 pb-44">
         {/* TAB 1: HOME */}
         {activeTab === 'home' && (
           <div className="max-w-xl mx-auto space-y-6">
@@ -381,6 +415,50 @@ export const App: React.FC = () => {
                   <Radio size={14} className="text-amber-400" />
                   <span>SoundCloud Ремиксы</span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('search');
+                    handleSearch('zxc');
+                  }}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center space-x-1.5 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Sparkles size={14} />
+                  <span>Dota / ZXC Плейлисты</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Genres & Explore chips */}
+            <div>
+              <div className="flex items-center justify-between mb-2.5 px-1">
+                <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center space-x-1.5">
+                  <TrendingUp size={14} />
+                  <span>Быстрый поиск по жанрам</span>
+                </span>
+              </div>
+              <div className="flex space-x-2 overflow-x-auto no-scrollbar py-1">
+                {[
+                  { label: '🔥 Топ Чарты', q: 'топ чарты 2026' },
+                  { label: '🎮 ZXC & Dota', q: 'zxc' },
+                  { label: '🚗 Drift Phonk', q: 'phonk drift' },
+                  { label: '🎧 Lofi & Chill', q: 'lofi hip hop' },
+                  { label: '🌙 Ночной драйв', q: 'night drive phonk' },
+                  { label: '🎸 Рок & Альтернатива', q: 'rock alternative' },
+                  { label: '⚡ Электроника', q: 'electronic bass' },
+                  { label: '🎤 Hip-Hop', q: 'hip hop rap' },
+                ].map((chip) => (
+                  <button
+                    key={chip.label}
+                    onClick={() => {
+                      setActiveTab('search');
+                      handleSearch(chip.q);
+                    }}
+                    className="text-xs px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white border border-white/5 shrink-0 transition-all active:scale-95 cursor-pointer"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -391,6 +469,16 @@ export const App: React.FC = () => {
                   <Flame size={18} className="text-rose-500" />
                   <span>Чарты и новинки (YouTube Music)</span>
                 </h3>
+                <button
+                  onClick={() => {
+                    setActiveTab('search');
+                    setSearchSource('youtube');
+                    handleSearch('популярная музыка', 'youtube');
+                  }}
+                  className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  Больше →
+                </button>
               </div>
 
               <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
@@ -417,6 +505,16 @@ export const App: React.FC = () => {
                   <Radio size={18} className="text-amber-500" />
                   <span>SoundCloud & Phonk Ремиксы</span>
                 </h3>
+                <button
+                  onClick={() => {
+                    setActiveTab('search');
+                    setSearchSource('soundcloud');
+                    handleSearch('phonk remix', 'soundcloud');
+                  }}
+                  className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  Больше →
+                </button>
               </div>
 
               <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
@@ -466,7 +564,12 @@ export const App: React.FC = () => {
               ].map((src) => (
                 <button
                   key={src.id}
-                  onClick={() => setSearchSource(src.id as any)}
+                  onClick={() => {
+                    setSearchSource(src.id as any);
+                    if (searchQuery.trim()) {
+                      handleSearch(searchQuery, src.id as any);
+                    }
+                  }}
                   className={`text-xs px-3.5 py-1.5 rounded-xl font-medium transition-all shrink-0 cursor-pointer ${
                     searchSource === src.id
                       ? 'bg-white text-black font-bold shadow'
@@ -477,6 +580,35 @@ export const App: React.FC = () => {
                 </button>
               ))}
             </div>
+
+            {/* Quick Suggestion Chips if no query */}
+            {!searchQuery.trim() && (
+              <div className="space-y-2 pt-2">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider px-1">
+                  Популярные запросы:
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    'zxc',
+                    'Miyagi',
+                    'FE!N',
+                    'Starboy',
+                    'Phonk remix',
+                    'Lofi girl',
+                    'Arctic Monkeys',
+                    'Nightcore',
+                  ].map((sug) => (
+                    <button
+                      key={sug}
+                      onClick={() => handleSearch(sug)}
+                      className="text-xs px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white border border-white/5 transition-all cursor-pointer"
+                    >
+                      🔍 {sug}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Search Results */}
             <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5 min-h-[300px]">
@@ -500,13 +632,14 @@ export const App: React.FC = () => {
                   />
                 ))
               ) : searchQuery ? (
-                <div className="py-16 text-center text-neutral-500">
+                <div className="py-16 text-center text-neutral-500 space-y-2">
                   <p className="text-sm">Ничего не найдено по запросу «{searchQuery}»</p>
+                  <p className="text-xs text-neutral-600">Попробуйте изменить поисковую фразу или фильтр источника</p>
                 </div>
               ) : (
                 <div className="py-12 text-center text-neutral-500 space-y-2">
                   <Search size={32} className="mx-auto opacity-30" />
-                  <p className="text-xs">Введите название песни или исполнителя</p>
+                  <p className="text-xs">Введите название песни, исполнителя или выберите подсказку выше</p>
                 </div>
               )}
             </div>
@@ -693,25 +826,34 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Mini Player */}
-      <MiniPlayer
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        accentColor={palette.accent}
-        glowColor={palette.glow}
-        onTogglePlay={handleTogglePlay}
-        onNext={handleNextTrack}
-        onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-      />
+      {/* Bottom Floating Player + Navigation Bar Container: Guarantees MiniPlayer never slides under BottomNav */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none">
+        {/* Floating MiniPlayer */}
+        {currentTrack && (
+          <div className="pointer-events-auto">
+            <MiniPlayer
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              duration={duration}
+              accentColor={palette.accent}
+              glowColor={palette.glow}
+              onTogglePlay={handleTogglePlay}
+              onNext={handleNextTrack}
+              onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+            />
+          </div>
+        )}
 
-      {/* Bottom Navigation */}
-      <BottomNav
-        activeTab={activeTab}
-        onChangeTab={setActiveTab}
-        accentColor={palette.accent}
-      />
+        {/* Bottom Navigation */}
+        <div className="pointer-events-auto">
+          <BottomNav
+            activeTab={activeTab}
+            onChangeTab={setActiveTab}
+            accentColor={palette.accent}
+          />
+        </div>
+      </div>
 
       {/* Fullscreen Player Sheet */}
       <FullPlayer

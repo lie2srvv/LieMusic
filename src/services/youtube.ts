@@ -1,13 +1,6 @@
+import { invoke } from '@tauri-apps/api/core';
 import { Track } from '../types';
 
-const PIPED_INSTANCES = [
-  'https://api.piped.privacydev.net',
-  'https://pipedapi.kavin.rocks',
-  'https://piped-api.lunar.icu',
-  'https://pipedapi.tokhmi.xyz',
-];
-
-// High-confidence initial chart items for instant playback on start
 export const FEATURED_TRENDING_TRACKS: Track[] = [
   {
     id: 'yt_trending_1',
@@ -63,11 +56,31 @@ export const FEATURED_TRENDING_TRACKS: Track[] = [
     id: 'yt_trending_6',
     title: 'Midnight City',
     artist: 'M83',
-    album: 'Hurry Up, We\'re Dreaming',
+    album: "Hurry Up, We're Dreaming",
     duration: 243,
     thumbnail: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=500&auto=format&fit=crop&q=80',
     source: 'youtube',
     streamUrl: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=synthwave-80s-110045.mp3',
+  },
+  {
+    id: 'yt_trending_7',
+    title: 'Sweater Weather',
+    artist: 'The Neighbourhood',
+    album: 'I Love You.',
+    duration: 240,
+    thumbnail: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=500&auto=format&fit=crop&q=80',
+    source: 'youtube',
+    streamUrl: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c3527e30e2.mp3?filename=chill-abstract-intention-12099.mp3',
+  },
+  {
+    id: 'yt_trending_8',
+    title: 'After Dark',
+    artist: 'Mr.Kitty',
+    album: 'TIME',
+    duration: 259,
+    thumbnail: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500&auto=format&fit=crop&q=80',
+    source: 'youtube',
+    streamUrl: 'https://cdn.pixabay.com/download/audio/2022/10/25/audio_24483fe6d1.mp3?filename=phonk-drift-124430.mp3',
   },
 ];
 
@@ -78,38 +91,30 @@ export async function searchYouTubeTracks(query: string): Promise<Track[]> {
 
   const cleanQuery = query.trim();
 
-  for (const instance of PIPED_INSTANCES) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+  // Try Native Rust search first (bypasses CORS, hits InnerTube API)
+  try {
+    const raw = await invoke<any[]>('search_music_native', {
+      query: cleanQuery,
+      sourceFilter: 'youtube',
+    });
 
-      const res = await fetch(`${instance}/search?q=${encodeURIComponent(cleanQuery)}&filter=music_songs`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      const items = (data.items || []).filter((item: any) => item.type === 'stream');
-
-      if (items.length > 0) {
-        return items.map((item: any) => ({
-          id: `yt_${item.url.replace('/watch?v=', '')}`,
-          title: item.title,
-          artist: item.uploaderName || 'Неизвестный исполнитель',
-          album: 'YouTube Music',
-          duration: item.duration || 180,
-          thumbnail: item.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
-          source: 'youtube' as const,
-        }));
-      }
-    } catch {
-      // try next instance
+    if (raw && Array.isArray(raw) && raw.length > 0) {
+      return raw.map((item) => ({
+        id: item.id,
+        title: item.title,
+        artist: item.artist || 'YouTube Music',
+        album: item.album || 'YouTube Music',
+        duration: item.duration || 180,
+        thumbnail: item.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
+        source: 'youtube' as const,
+        streamUrl: item.streamUrl || item.stream_url,
+      }));
     }
+  } catch (err) {
+    console.warn('[LieMusic] Native YouTube search failed, falling back:', err);
   }
 
-  // Local fallback filter if offline or upstream instances delayed
+  // Local fallback filter if offline
   return FEATURED_TRENDING_TRACKS.filter(
     (t) =>
       t.title.toLowerCase().includes(cleanQuery.toLowerCase()) ||
@@ -118,37 +123,25 @@ export async function searchYouTubeTracks(query: string): Promise<Track[]> {
 }
 
 export async function resolveStreamUrl(track: Track): Promise<string> {
-  if (track.streamUrl && !track.streamUrl.startsWith('piped:')) {
+  // If track already has direct playable mp3
+  if (track.streamUrl && !track.streamUrl.startsWith('sc_transcoding:') && !track.streamUrl.startsWith('piped:')) {
     return track.streamUrl;
   }
 
-  const videoId = track.id.replace('yt_', '');
-
-  for (const instance of PIPED_INSTANCES) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4500);
-
-      const res = await fetch(`${instance}/streams/${videoId}`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      const audioStreams = (data.audioStreams || []).sort(
-        (a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0)
-      );
-
-      if (audioStreams.length > 0 && audioStreams[0].url) {
-        return audioStreams[0].url;
-      }
-    } catch {
-      // try next
+  // Call native stream resolver
+  try {
+    const stream = await invoke<string>('resolve_stream_url_native', {
+      trackId: track.id,
+      streamUrl: track.streamUrl || null,
+      source: track.source,
+    });
+    if (stream && stream.length > 0) {
+      return stream;
     }
+  } catch (err) {
+    console.warn('[LieMusic] Error resolving stream URL natively:', err);
   }
 
-  // If online stream resolution fails, fallback to clean demo audio
+  if (track.streamUrl) return track.streamUrl;
   return 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
 }

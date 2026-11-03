@@ -30,12 +30,12 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="fixed bottom-[60px] left-0 right-0 z-20 px-2.5 pb-1">
+    <div className="w-full max-w-md mx-auto px-2.5 pb-2">
       <div
         onClick={onOpenFullPlayer}
-        className="max-w-md mx-auto relative overflow-hidden bg-[#211F1F]/90 backdrop-blur-2xl rounded-2xl border border-white/10 p-2.5 flex items-center justify-between shadow-2xl active:scale-[0.99] transition-all cursor-pointer"
+        className="relative overflow-hidden bg-[#211F1F]/95 backdrop-blur-2xl rounded-2xl border border-white/10 p-2.5 flex items-center justify-between shadow-2xl active:scale-[0.99] transition-all cursor-pointer"
         style={{
-          boxShadow: `0 10px 30px -10px ${glowColor}`,
+          boxShadow: `0 8px 24px -6px ${glowColor}`,
         }}
       >
         {/* Subtle Top Progress Bar */}
@@ -84,7 +84,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         <div className="flex items-center space-x-1 shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={onTogglePlay}
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-transform active:scale-90"
+            className="w-10 h-10 rounded-full flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
             style={{ backgroundColor: accentColor, color: '#151313' }}
             title={isPlaying ? 'Пауза' : 'Играть'}
           >
@@ -97,7 +97,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
           <button
             onClick={onNext}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-300 hover:text-white transition-transform active:scale-90"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-300 hover:text-white transition-transform active:scale-90 cursor-pointer"
             title="Следующий трек"
           >
             <SkipForward size={18} />

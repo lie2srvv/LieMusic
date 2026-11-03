@@ -394,13 +394,18 @@ fn extract_youtube_videos(val: &serde_json::Value, out: &mut Vec<SearchTrackResu
 
             let track_id = format!("yt_{}", vid);
             if !vid.is_empty() && !title.is_empty() && !out.iter().any(|t| t.id == track_id) {
+                let high_res_thumb = if !vid.is_empty() {
+                    format!("https://i.ytimg.com/vi/{}/hqdefault.jpg", vid)
+                } else {
+                    thumb.to_string()
+                };
                 out.push(SearchTrackResult {
                     id: track_id,
                     title,
                     artist,
                     album: Some("YouTube Music".into()),
                     duration,
-                    thumbnail: thumb.to_string(),
+                    thumbnail: high_res_thumb,
                     source: "youtube".into(),
                     stream_url: None,
                 });
@@ -518,7 +523,13 @@ async fn search_music_native(
                         let thumbnail = raw_thumb
                             .replace("-large.", "-t500x500.")
                             .replace("-badge.", "-t500x500.")
-                            .replace("-small.", "-t500x500.");
+                            .replace("-small.", "-t500x500.")
+                            .replace("-tiny.", "-t500x500.")
+                            .replace("-mini.", "-t500x500.")
+                            .replace("-crop.", "-t500x500.")
+                            .replace("-t67x67.", "-t500x500.")
+                            .replace("-t120x120.", "-t500x500.")
+                            .replace("-t300x300.", "-t500x500.");
 
                         let stream_url = item
                             .get("media")

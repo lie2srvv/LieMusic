@@ -206,10 +206,26 @@ class MediaPlaybackService : Service() {
     }
 
     private fun loadCoverArt(url: String) {
-        currentCoverUrl = url
+        var cleanUrl = url.trim()
+        if (cleanUrl.contains("sndcdn.com")) {
+            cleanUrl = cleanUrl
+                .replace("-large.", "-t500x500.")
+                .replace("-badge.", "-t500x500.")
+                .replace("-small.", "-t500x500.")
+                .replace("-tiny.", "-t500x500.")
+                .replace("-mini.", "-t500x500.")
+                .replace("-crop.", "-t500x500.")
+                .replace("-t67x67.", "-t500x500.")
+                .replace("-t120x120.", "-t500x500.")
+                .replace("-t300x300.", "-t500x500.")
+        }
+        if (cleanUrl.contains("ytimg.com/vi/")) {
+            cleanUrl = cleanUrl.replace("/default.jpg", "/hqdefault.jpg")
+        }
+        currentCoverUrl = cleanUrl
         Thread {
             try {
-                val connection = URL(url).openConnection() as HttpURLConnection
+                val connection = URL(cleanUrl).openConnection() as HttpURLConnection
                 connection.doInput = true
                 connection.connectTimeout = 6000
                 connection.readTimeout = 6000

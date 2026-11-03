@@ -28,6 +28,7 @@ import { EqualizerModal } from './components/EqualizerModal';
 import { TrackListItem } from './components/TrackListItem';
 import { invoke } from '@tauri-apps/api/core';
 import { FoxLogo } from './components/FoxLogo';
+import { getHighResThumbnail } from './utils/thumbnail';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
@@ -98,21 +99,24 @@ export const App: React.FC = () => {
     const cachedFavs = localStorage.getItem('liemusic_favorites');
     if (cachedFavs) {
       try {
-        setFavorites(JSON.parse(cachedFavs));
+        const list: Track[] = JSON.parse(cachedFavs);
+        setFavorites(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) })));
       } catch {}
     }
 
     const cachedHistory = localStorage.getItem('liemusic_history');
     if (cachedHistory) {
       try {
-        setHistory(JSON.parse(cachedHistory));
+        const list: Track[] = JSON.parse(cachedHistory);
+        setHistory(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) })));
       } catch {}
     }
 
     const cachedDownloads = localStorage.getItem('liemusic_downloads');
     if (cachedDownloads) {
       try {
-        setDownloadedTracks(JSON.parse(cachedDownloads));
+        const list: Track[] = JSON.parse(cachedDownloads);
+        setDownloadedTracks(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) })));
       } catch {}
     }
   }, []);
@@ -130,7 +134,8 @@ export const App: React.FC = () => {
   }, [downloadedTracks]);
 
   const handlePlayTrack = useCallback(
-    async (track: Track, newQueue?: Track[]) => {
+    async (rawTrack: Track, newQueue?: Track[]) => {
+      const track: Track = { ...rawTrack, thumbnail: getHighResThumbnail(rawTrack.thumbnail) };
       // Instantly stop previous playing track
       audioEngine.stop();
       setIsPlaying(false);

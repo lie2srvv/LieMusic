@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Play, Heart, Download, Trash2, Check, Loader2 } from 'lucide-react';
 import { Track } from '../types';
+import { getHighResThumbnail } from '../utils/thumbnail';
 
 interface TrackListItemProps {
   track: Track;
@@ -121,7 +122,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
         <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-neutral-800 shrink-0 shadow-md">
           {track.thumbnail ? (
             <img
-              src={track.thumbnail}
+              src={getHighResThumbnail(track.thumbnail)}
               alt={track.title}
               className="w-full h-full object-cover"
               loading="lazy"

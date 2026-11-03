@@ -1,4 +1,5 @@
 import { Track, EqualizerPreset } from '../types';
+import { getHighResThumbnail } from '../utils/thumbnail';
 
 export const EQUALIZER_FREQUENCIES = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
@@ -93,7 +94,7 @@ class AudioEngine {
         bridge.updateState(
           this.currentTrack.title || 'LieMusic',
           this.currentTrack.artist || 'Свободный стриминг',
-          this.currentTrack.thumbnail || '',
+          getHighResThumbnail(this.currentTrack.thumbnail) || '',
           isPlaying,
           posMs,
           durMs
@@ -157,7 +158,7 @@ class AudioEngine {
   }
 
   public async playTrack(track: Track, streamUrl: string) {
-    this.currentTrack = track;
+    this.currentTrack = { ...track, thumbnail: getHighResThumbnail(track.thumbnail) };
     this.initAudioNodes();
 
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
@@ -282,10 +283,10 @@ class AudioEngine {
         artist: this.currentTrack.artist,
         album: this.currentTrack.album || 'LieMusic',
         artwork: [
-          { src: this.currentTrack.thumbnail, sizes: '96x96', type: 'image/jpeg' },
-          { src: this.currentTrack.thumbnail, sizes: '128x128', type: 'image/jpeg' },
-          { src: this.currentTrack.thumbnail, sizes: '192x192', type: 'image/jpeg' },
-          { src: this.currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' },
+          { src: getHighResThumbnail(this.currentTrack.thumbnail), sizes: '96x96', type: 'image/jpeg' },
+          { src: getHighResThumbnail(this.currentTrack.thumbnail), sizes: '128x128', type: 'image/jpeg' },
+          { src: getHighResThumbnail(this.currentTrack.thumbnail), sizes: '192x192', type: 'image/jpeg' },
+          { src: getHighResThumbnail(this.currentTrack.thumbnail), sizes: '512x512', type: 'image/jpeg' },
         ],
       });
 

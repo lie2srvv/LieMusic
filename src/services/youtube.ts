@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { Track } from '../types';
+import { getHighResThumbnail } from '../utils/thumbnail';
 
 export async function searchYouTubeTracks(query: string): Promise<Track[]> {
   const cleanQuery = query.trim();
@@ -18,7 +19,7 @@ export async function searchYouTubeTracks(query: string): Promise<Track[]> {
         artist: item.artist || 'YouTube Music',
         album: item.album || 'YouTube Music',
         duration: item.duration || 180,
-        thumbnail: item.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
+        thumbnail: getHighResThumbnail(item.thumbnail) || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800',
         source: 'youtube' as const,
         streamUrl: item.streamUrl || item.stream_url,
       }));

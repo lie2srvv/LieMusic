@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Disc3 } from 'lucide-react';
 import { Track } from '../types';
+import { getHighResThumbnail } from '../utils/thumbnail';
 
 interface MiniPlayerProps {
   currentTrack: Track | null;
@@ -56,7 +57,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           <div className="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 bg-neutral-800 shadow-md">
             {currentTrack.thumbnail ? (
               <img
-                src={currentTrack.thumbnail}
+                src={getHighResThumbnail(currentTrack.thumbnail)}
                 alt={currentTrack.title}
                 className="w-full h-full object-cover"
               />

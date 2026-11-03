@@ -15,6 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Track } from '../types';
+import { getHighResThumbnail } from '../utils/thumbnail';
 
 interface FullPlayerProps {
   isOpen: boolean;
@@ -127,7 +128,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         >
           {track.thumbnail ? (
             <img
-              src={track.thumbnail}
+              src={getHighResThumbnail(track.thumbnail)}
               alt={track.title}
               className="w-full h-full object-cover"
             />

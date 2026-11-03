@@ -24,22 +24,22 @@ interface FullPlayerProps {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  accentColor: string;
+  glowColor: string;
   isFavorite: boolean;
   isShuffle: boolean;
   isRepeat: boolean;
-  isDownloading?: boolean;
-  volume: number;
   visualizerData: Uint8Array;
-  accentColor: string;
-  glowColor: string;
+  isDownloading?: boolean;
+  volume?: number;
+  onVolumeChange?: (v: number) => void;
   onTogglePlay: () => void;
-  onNext: () => void;
   onPrev: () => void;
+  onNext: () => void;
   onSeek: (seconds: number) => void;
   onToggleFavorite: () => void;
   onToggleShuffle: () => void;
   onToggleRepeat: () => void;
-  onVolumeChange: (volume: number) => void;
   onOpenEqualizer: () => void;
   onDownloadTrack: () => void;
 }
@@ -51,16 +51,16 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   isPlaying,
   currentTime,
   duration,
+  accentColor,
+  glowColor,
   isFavorite,
   isShuffle,
   isRepeat,
-  isDownloading,
   visualizerData,
-  accentColor,
-  glowColor,
+  isDownloading,
   onTogglePlay,
-  onNext,
   onPrev,
+  onNext,
   onSeek,
   onToggleFavorite,
   onToggleShuffle,
@@ -70,10 +70,10 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
 }) => {
   if (!isOpen || !track) return null;
 
-  const formatTime = (seconds: number) => {
-    if (isNaN(seconds) || seconds < 0) return '0:00';
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
+  const formatTime = (secs: number) => {
+    if (isNaN(secs)) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
@@ -85,34 +85,36 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         style={{ backgroundColor: glowColor }}
       />
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-12 pb-4 z-10 shrink-0">
+      {/* Header with Safe Area Spacing */}
+      <div className="flex items-center justify-between px-6 pt-[max(3.5rem,env(safe-area-inset-top,3.5rem))] pb-2 z-10 shrink-0">
         <button
           onClick={onClose}
-          className="w-10 h-10 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
+          className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer shadow-sm"
+          title="Свернуть"
         >
           <ChevronDown size={22} />
         </button>
 
-        <div className="text-center">
+        <div className="text-center px-4">
           <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
             СЕЙЧАС ИГРАЕТ
           </p>
-          <p className="text-xs font-semibold text-neutral-200 mt-0.5">
+          <p className="text-xs font-semibold text-neutral-200 mt-0.5 truncate max-w-[180px]">
             {track.album || (track.source === 'youtube' ? 'YouTube Music' : 'SoundCloud')}
           </p>
         </div>
 
         <button
           onClick={onToggleFavorite}
-          className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all active:scale-90 cursor-pointer ${
+          className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-sm ${
             isFavorite
-              ? 'bg-rose-500/20 text-rose-500 border-rose-500/30'
-              : 'bg-white/5 border-white/5 text-neutral-300 hover:text-white'
+              ? 'bg-rose-500/20 text-rose-500 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+              : 'bg-white/5 border-white/10 text-neutral-300 hover:text-white'
           }`}
+          title={isFavorite ? 'В избранном' : 'Добавить в избранное'}
         >
           <Heart
-            size={18}
+            size={20}
             fill={isFavorite ? 'currentColor' : 'none'}
           />
         </button>
@@ -121,9 +123,9 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
       {/* Artwork Canvas with subtle glow */}
       <div className="flex-1 flex flex-col items-center justify-center px-8 min-h-0 py-2">
         <div
-          className="relative w-64 h-64 sm:w-72 sm:h-72 max-w-[70vw] max-h-[35vh] aspect-square rounded-3xl overflow-hidden shadow-2xl transition-all duration-500"
+          className="relative w-72 h-72 sm:w-80 sm:h-80 max-w-[76vw] max-h-[36vh] aspect-square rounded-3xl overflow-hidden shadow-2xl transition-all duration-500"
           style={{
-            boxShadow: `0 20px 40px -10px ${glowColor}`,
+            boxShadow: `0 24px 48px -12px ${glowColor}`,
           }}
         >
           {track.thumbnail ? (
@@ -138,7 +140,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             </div>
           )}
 
-          <div className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[9px] font-bold text-neutral-300 uppercase tracking-wider flex items-center space-x-1">
+          <div className="absolute top-3.5 left-3.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[9px] font-bold text-neutral-300 uppercase tracking-wider flex items-center space-x-1.5 shadow-md">
             <span
               className="w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: accentColor }}
@@ -148,7 +150,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         </div>
 
         {/* Realtime Audio Visualizer Bars */}
-        <div className="flex items-center justify-center space-x-1 h-8 mt-5 px-4 w-full max-w-xs">
+        <div className="flex items-center justify-center space-x-1.5 h-8 mt-5 px-4 w-full max-w-xs">
           {Array.from({ length: 24 }).map((_, i) => {
             const val = visualizerData[i] || 0;
             const barHeight = isPlaying ? Math.max(3, (val / 255) * 28) : 3;
@@ -160,7 +162,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 style={{
                   height: `${barHeight}px`,
                   backgroundColor: accentColor,
-                  opacity: isPlaying ? 0.8 : 0.2,
+                  opacity: isPlaying ? 0.85 : 0.2,
                 }}
               />
             );
@@ -168,52 +170,53 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         </div>
       </div>
 
-      {/* Track Metadata & Quick Controls */}
-      <div className="px-7 space-y-3 pb-8 shrink-0">
+      {/* Track Metadata & Ergonomic Spaced Controls */}
+      <div className="px-7 pt-2 pb-[max(3rem,env(safe-area-inset-bottom,3rem))] space-y-6 shrink-0">
+        {/* Track Title, Artist & Quick Actions */}
         <div className="flex items-center justify-between">
-          <div className="min-w-0 pr-4">
-            <h2 className="text-xl font-bold text-white truncate tracking-tight">
+          <div className="min-w-0 pr-4 flex-1">
+            <h2 className="text-2xl font-bold text-white truncate tracking-tight">
               {track.title}
             </h2>
-            <p className="text-sm font-medium text-neutral-400 truncate mt-0.5">
+            <p className="text-base font-medium text-neutral-400 truncate mt-1">
               {track.artist}
             </p>
           </div>
 
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="flex items-center space-x-2.5 shrink-0">
             <button
               onClick={onOpenEqualizer}
-              className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
+              className="w-11 h-11 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer shadow-sm"
               title="Эквалайзер"
             >
-              <Sliders size={18} />
+              <Sliders size={19} />
             </button>
 
             <button
               onClick={onDownloadTrack}
               disabled={isDownloading}
-              className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-all active:scale-90 cursor-pointer ${
+              className={`w-11 h-11 rounded-2xl border flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-sm ${
                 isDownloading
                   ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                   : track.isDownloaded
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                  : 'bg-white/5 hover:bg-white/10 border-white/5 text-neutral-300 hover:text-white'
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-neutral-300 hover:text-white'
               }`}
               title={isDownloading ? 'Скачивание трека...' : track.isDownloaded ? 'Скачано офлайн' : 'Скачать трек'}
             >
               {isDownloading ? (
-                <Loader2 size={18} className="animate-spin text-amber-400" />
+                <Loader2 size={19} className="animate-spin text-amber-400" />
               ) : track.isDownloaded ? (
-                <Check size={18} />
+                <Check size={19} className="stroke-[2.5]" />
               ) : (
-                <Download size={18} />
+                <Download size={19} />
               )}
             </button>
           </div>
         </div>
 
         {/* Progress Bar & Seek Scrub */}
-        <div className="space-y-1.5 pt-1">
+        <div className="space-y-2">
           <input
             type="range"
             min="0"
@@ -223,26 +226,26 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer"
             style={{ accentColor: accentColor }}
           />
-          <div className="flex justify-between text-[11px] font-mono text-neutral-400">
+          <div className="flex justify-between text-xs font-mono text-neutral-400 pt-0.5 px-0.5">
             <span>{formatTime(currentTime)}</span>
             <span>-{formatTime(Math.max(0, duration - currentTime))}</span>
           </div>
         </div>
 
         {/* Playback Controls Row */}
-        <div className="flex items-center justify-between pt-2 px-2">
+        <div className="flex items-center justify-between pt-1 px-1">
           <button
             onClick={onToggleShuffle}
-            className={`relative p-2.5 rounded-full transition-all active:scale-90 cursor-pointer flex flex-col items-center justify-center ${
+            className={`relative p-3 rounded-full transition-all active:scale-90 cursor-pointer flex items-center justify-center ${
               isShuffle
                 ? 'text-white bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/50'
-                : 'text-neutral-500 hover:text-neutral-300'
+                : 'text-neutral-400 hover:text-white'
             }`}
             title="Перемешать"
           >
-            <Shuffle size={20} className={isShuffle ? 'stroke-[2.5]' : ''} />
+            <Shuffle size={22} className={isShuffle ? 'stroke-[2.5]' : ''} />
             {isShuffle && (
-              <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#fff]" />
+              <span className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#fff]" />
             )}
           </button>
 
@@ -251,23 +254,23 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             className="p-3 text-neutral-200 hover:text-white transition-transform active:scale-90 cursor-pointer"
             title="Предыдущий"
           >
-            <SkipBack size={28} />
+            <SkipBack size={30} />
           </button>
 
           <button
             onClick={onTogglePlay}
-            className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-transform active:scale-90 cursor-pointer"
+            className="w-18 h-18 rounded-full flex items-center justify-center shadow-2xl transition-transform active:scale-95 cursor-pointer"
             style={{
               backgroundColor: '#FFFFFF',
               color: '#151313',
-              boxShadow: `0 8px 30px -4px ${glowColor}`,
+              boxShadow: `0 12px 35px -4px ${glowColor}`,
             }}
             title={isPlaying ? 'Пауза' : 'Играть'}
           >
             {isPlaying ? (
-              <Pause size={28} fill="#151313" />
+              <Pause size={30} fill="#151313" />
             ) : (
-              <Play size={28} fill="#151313" className="translate-x-0.5" />
+              <Play size={30} fill="#151313" className="translate-x-0.5" />
             )}
           </button>
 
@@ -276,21 +279,21 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             className="p-3 text-neutral-200 hover:text-white transition-transform active:scale-90 cursor-pointer"
             title="Следующий"
           >
-            <SkipForward size={28} />
+            <SkipForward size={30} />
           </button>
 
           <button
             onClick={onToggleRepeat}
-            className={`relative p-2.5 rounded-full transition-all active:scale-90 cursor-pointer flex flex-col items-center justify-center ${
+            className={`relative p-3 rounded-full transition-all active:scale-90 cursor-pointer flex items-center justify-center ${
               isRepeat
                 ? 'text-white bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/50'
-                : 'text-neutral-500 hover:text-neutral-300'
+                : 'text-neutral-400 hover:text-white'
             }`}
             title="Повтор трека"
           >
-            <Repeat size={20} className={isRepeat ? 'stroke-[2.5]' : ''} />
+            <Repeat size={22} className={isRepeat ? 'stroke-[2.5]' : ''} />
             {isRepeat && (
-              <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#fff]" />
+              <span className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#fff]" />
             )}
           </button>
         </div>

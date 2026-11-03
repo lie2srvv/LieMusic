@@ -114,6 +114,45 @@ export const translations = {
     inFavorites: 'В избранном',
     freeStreaming: 'Свободный стриминг',
     notPlaying: 'Не играет',
+
+    // Settings
+    settings: 'Настройки',
+    storageManagement: 'Управление памятью',
+    storageSubtitle: 'Скачанные треки и очистка места',
+    totalStorageUsed: (count: number, size: string) => `${count} ${count === 1 ? 'файл' : count >= 2 && count <= 4 ? 'файла' : 'файлов'} · всего ${size}`,
+    clearAllDownloads: 'Удалить все скачанные треки',
+    clearAllDownloadsConfirm: 'Вы уверены, что хотите удалить все сохраненные треки из памяти устройства?',
+    sortBy: 'Сортировка:',
+    sortBySizeDesc: 'Сначала тяжелые (по размеру)',
+    sortBySizeAsc: 'Сначала легкие (по размеру)',
+    sortByName: 'По названию (А–Я)',
+    sortByDate: 'Сначала новые',
+
+    // Support & YooMoney
+    supportProject: 'Поддержать проект',
+    supportDesc: 'Если вам нравится LieMusic, вы можете поддержать разработку и развитие плеера любой суммой.',
+    customAmount: 'Своя сумма',
+    donateViaYooMoney: 'Поддержать через ЮMoney',
+    enterAmountRub: 'Сумма в ₽',
+    minAmountNotice: 'Минимум 10 ₽ для перевода через ЮMoney',
+
+    // App Preferences
+    preferences: 'Параметры приложения',
+    cellularDownloadTitle: 'Загрузка по мобильной сети',
+    cellularDownloadSubtitle: 'Разрешить скачивание треков через сотовую сеть без предупреждения',
+    confirmDeleteTitle: 'Подтверждать удаление',
+    confirmDeleteSubtitle: 'Запрашивать подтверждение перед удалением трека из памяти',
+    openEqualizer: 'Открыть эквалайзер',
+    clearHistory: 'Очистить историю прослушиваний',
+    historyCleared: 'История очищена',
+
+    // About
+    about: 'О приложении',
+    aboutSubtitle: 'Свободный музыкальный стриминг без подписок и рекламы',
+    aboutDescription: 'Свободный музыкальный плеер без подписок и рекламы. Потоковое воспроизведение из открытых каталогов SoundCloud и YouTube Music, а также сохранение любимых треков для прослушивания офлайн.',
+    developer: 'Разработчик',
+    version: 'Версия',
+    openTelegram: 'Написать разработчику в Telegram',
   },
   en: {
     // Branding & Header
@@ -228,5 +267,44 @@ export const translations = {
     inFavorites: 'In favorites',
     freeStreaming: 'Free Streaming',
     notPlaying: 'Not playing',
+
+    // Settings
+    settings: 'Settings',
+    storageManagement: 'Storage Management',
+    storageSubtitle: 'Downloaded tracks and disk usage',
+    totalStorageUsed: (count: number, size: string) => `${count} ${count === 1 ? 'file' : 'files'} · total ${size}`,
+    clearAllDownloads: 'Delete all downloaded tracks',
+    clearAllDownloadsConfirm: 'Are you sure you want to remove all downloaded music from device storage?',
+    sortBy: 'Sort by:',
+    sortBySizeDesc: 'Heaviest first (File size)',
+    sortBySizeAsc: 'Lightest first (File size)',
+    sortByName: 'By title (A–Z)',
+    sortByDate: 'Newest first',
+
+    // Support & YooMoney
+    supportProject: 'Support Project',
+    supportDesc: 'If you enjoy LieMusic, you can support continuous development with any donation amount.',
+    customAmount: 'Custom amount',
+    donateViaYooMoney: 'Donate via YooMoney',
+    enterAmountRub: 'Amount in ₽',
+    minAmountNotice: 'Minimum 10 ₽ for YooMoney transfer',
+
+    // App Preferences
+    preferences: 'Preferences',
+    cellularDownloadTitle: 'Cellular downloads',
+    cellularDownloadSubtitle: 'Allow downloading music over mobile data without warning',
+    confirmDeleteTitle: 'Confirm deletion',
+    confirmDeleteSubtitle: 'Ask before removing downloaded tracks from device',
+    openEqualizer: 'Open Equalizer',
+    clearHistory: 'Clear playback history',
+    historyCleared: 'History cleared',
+
+    // About
+    about: 'About',
+    aboutSubtitle: 'Free music streaming with zero ads and subscriptions',
+    aboutDescription: 'Free music streaming player with zero ads and subscriptions. Stream from open SoundCloud and YouTube Music catalogs or save favorite tracks for offline playback.',
+    developer: 'Developer',
+    version: 'Version',
+    openTelegram: 'Contact developer on Telegram',
   },
 };

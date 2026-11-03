@@ -7,6 +7,7 @@ import {
   Disc3,
   Play,
   Sliders,
+  Settings,
   Trash2,
   ChevronDown,
   ChevronUp,
@@ -28,6 +29,7 @@ import { BottomNav, TabType } from './components/BottomNav';
 import { MiniPlayer } from './components/MiniPlayer';
 import { FullPlayer } from './components/FullPlayer';
 import { EqualizerModal } from './components/EqualizerModal';
+import { SettingsModal } from './components/SettingsModal';
 import { TrackListItem } from './components/TrackListItem';
 import { invoke } from '@tauri-apps/api/core';
 import { FoxLogo } from './components/FoxLogo';
@@ -89,6 +91,7 @@ export const App: React.FC = () => {
 
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState<boolean>(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   const [equalizerBands, setEqualizerBands] = useState<number[]>([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   const [bassBoost, setBassBoost] = useState<number>(0);
@@ -531,6 +534,13 @@ export const App: React.FC = () => {
             title={t.equalizer}
           >
             <Sliders size={18} />
+          </button>
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-9 h-9 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-all border border-white/5 cursor-pointer active:scale-95"
+            title={t.settings}
+          >
+            <Settings size={18} />
           </button>
         </div>
       </header>
@@ -1178,6 +1188,29 @@ export const App: React.FC = () => {
           localStorage.setItem('liemusic_language', lang);
         }}
         onClose={() => setIsLanguageModalOpen(false)}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        language={language}
+        onLanguageChange={(lang) => {
+          setLanguage(lang);
+          localStorage.setItem('liemusic_language', lang);
+        }}
+        downloadedTracks={downloadedTracks}
+        onDeleteTrack={(trackId, trackTitle) => requestDeleteDownload(trackId, trackTitle)}
+        onClearAllDownloads={() => {
+          if (downloadedTracks.length > 0) {
+            requestDeleteMultipleDownloads(downloadedTracks.map((t) => t.id));
+          }
+        }}
+        onOpenEqualizer={() => setIsEqualizerOpen(true)}
+        onClearHistory={() => {
+          setHistory([]);
+          localStorage.removeItem('liemusic_history');
+        }}
+        accentColor={palette.accent}
       />
 
       <CellularDownloadModal

@@ -1,59 +1,55 @@
 import React, { useRef } from 'react';
 import { Play, Heart, Download, Trash2, Check, Loader2 } from 'lucide-react';
 import { Track } from '../types';
-import { Language, translations } from '../i18n/translations';
-import { getHighResThumbnail } from '../utils/thumbnail';
+import { translations, Language } from '../i18n/translations';
 
 interface TrackListItemProps {
   track: Track;
-  language?: Language;
   isCurrent: boolean;
   isPlaying: boolean;
   isFavorite: boolean;
   isDownloaded?: boolean;
   isDownloading?: boolean;
   fileSize?: string;
-  accentColor: string;
+  showFileSize?: boolean;
+  accentColor?: string;
   isSelectMode?: boolean;
   isSelected?: boolean;
+  language: Language;
+  onSelect?: () => void;
+  onLongPress?: () => void;
   onPlay: () => void;
   onToggleFavorite: () => void;
   onDownload?: () => void;
   onDeleteDownload?: () => void;
-  onSelect?: () => void;
-  onLongPress?: () => void;
 }
 
 export const TrackListItem: React.FC<TrackListItemProps> = ({
   track,
-  language = "ru",
   isCurrent,
   isPlaying,
   isFavorite,
   isDownloaded,
   isDownloading,
   fileSize,
-  accentColor,
+  showFileSize = false,
+  accentColor = '#FF3366',
   isSelectMode = false,
   isSelected = false,
+  language,
+  onSelect,
+  onLongPress,
   onPlay,
   onToggleFavorite,
   onDownload,
   onDeleteDownload,
-  onSelect,
-  onLongPress,
 }) => {
   const t = translations[language];
-  const isTrackDownloaded = isDownloaded ?? track.isDownloaded;
-  const trackFileSize = fileSize ?? track.fileSize;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressTriggered = useRef<boolean>(false);
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
+  const isTrackDownloaded = isDownloaded ?? track.isDownloaded;
+  const trackFileSize = fileSize || track.fileSize;
 
   const startPressTimer = () => {
     isLongPressTriggered.current = false;
@@ -122,11 +118,11 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           </div>
         )}
 
-        {/* Cover Art with Playing State */}
+        {/* Artwork */}
         <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-neutral-800 shrink-0 shadow-md">
           {track.thumbnail ? (
             <img
-              src={getHighResThumbnail(track.thumbnail)}
+              src={track.thumbnail}
               alt={track.title}
               className="w-full h-full object-cover"
               loading="lazy"
@@ -175,8 +171,8 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
               {track.source === 'youtube' ? 'YT' : track.source === 'local' ? 'LOCAL' : 'SC'}
             </span>
             <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
-            {isTrackDownloaded && trackFileSize && (
-              <span className="text-[10px] font-mono text-emerald-400/80 bg-emerald-500/10 px-1 rounded">
+            {showFileSize && isTrackDownloaded && trackFileSize && (
+              <span className="text-[10px] font-mono font-medium text-emerald-400/90 bg-emerald-500/15 border border-emerald-500/20 px-1.5 py-0.5 rounded-md">
                 {trackFileSize}
               </span>
             )}
@@ -184,58 +180,62 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
         </div>
       </div>
 
-      {/* Right: Actions and Duration */}
-      {!isSelectMode && (
-        <div
-          className="flex items-center space-x-1.5 shrink-0"
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onMouseUp={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
+      {/* Action Buttons */}
+      <div className="flex items-center space-x-1 shrink-0">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite();
+          }}
+          className={`p-2 rounded-xl transition-all cursor-pointer ${
+            isFavorite
+              ? 'text-rose-500 hover:text-rose-400 active:scale-125'
+              : 'text-neutral-500 hover:text-white'
+          }`}
+          title={isFavorite ? t.inFavorites : t.addToFavorites}
         >
-          <button
-            onClick={onToggleFavorite}
-            className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
-              isFavorite ? 'text-rose-500' : 'text-neutral-500 hover:text-neutral-300'
-            }`}
-            title={isFavorite ? t.remove : t.addToFavorites}
-          >
-            <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
-          </button>
+          <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+        </button>
 
-          {isDownloading ? (
-            <div
-              className="p-2 rounded-xl text-amber-400 flex items-center justify-center animate-pulse"
-              title={t.downloading}
-            >
-              <Loader2 size={16} className="animate-spin text-amber-400" />
-            </div>
-          ) : onDeleteDownload ? (
+        {isDownloading ? (
+          <div className="p-2 text-emerald-400" title={t.downloading}>
+            <Loader2 size={16} className="animate-spin" />
+          </div>
+        ) : isTrackDownloaded ? (
+          onDeleteDownload ? (
             <button
-              onClick={onDeleteDownload}
-              className="p-2 rounded-xl text-neutral-500 hover:text-rose-400 active:scale-90 transition-all cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteDownload();
+              }}
+              className="p-2 text-neutral-500 hover:text-rose-400 transition-colors cursor-pointer"
               title={t.deleteFromDevice}
             >
               <Trash2 size={16} />
             </button>
-          ) : onDownload ? (
-            <button
-              onClick={onDownload}
-              className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
-                isTrackDownloaded ? 'text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
-              }`}
-              title={isTrackDownloaded ? t.downloadedOffline : t.downloadTrack}
-            >
-              <Download size={16} />
-            </button>
-          ) : null}
+          ) : (
+            <div className="p-2 text-emerald-400" title={t.downloadedOffline}>
+              <Check size={16} className="stroke-[2.5]" />
+            </div>
+          )
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDownload?.();
+            }}
+            className="p-2 text-neutral-500 hover:text-white transition-colors cursor-pointer"
+            title={t.downloadTrack}
+          >
+            <Download size={16} />
+          </button>
+        )}
 
-          <span className="text-xs font-mono text-neutral-500 w-10 text-right">
-            {formatTime(track.duration)}
-          </span>
-        </div>
-      )}
+        <span className="text-xs text-neutral-500 font-mono w-10 text-right">
+          {Math.floor(track.duration / 60)}:
+          {(track.duration % 60).toString().padStart(2, '0')}
+        </span>
+      </div>
     </div>
   );
 };

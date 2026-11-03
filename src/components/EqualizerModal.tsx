@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Sliders, X, Sparkles, Volume2 } from 'lucide-react';
 import { translations, Language } from '../i18n/translations';
 
@@ -16,6 +16,87 @@ interface EqualizerModalProps {
 }
 
 const FREQUENCY_LABELS = ['31Hz', '62Hz', '125Hz', '250Hz', '500Hz', '1kHz', '2kHz', '4kHz', '8kHz', '16kHz'];
+
+interface VerticalFaderProps {
+  gain: number;
+  label: string;
+  accentColor: string;
+  onChange: (value: number) => void;
+}
+
+const VerticalFader: React.FC<VerticalFaderProps> = ({
+  gain,
+  label,
+  accentColor,
+  onChange,
+}) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const calculateGain = (clientY: number) => {
+    if (!trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const clampedY = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    const ratio = 1 - clampedY / rect.height; // 1 at top (+12), 0 at bottom (-12)
+    const newGain = Math.round((ratio * 24 - 12) * 2) / 2; // step of 0.5 dB
+    onChange(Math.max(-12, Math.min(12, newGain)));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    calculateGain(e.clientY);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (e.buttons === 1) {
+      calculateGain(e.clientY);
+    }
+  };
+
+  const percent = ((gain + 12) / 24) * 100; // 0% at -12dB, 50% at 0dB, 100% at +12dB
+
+  return (
+    <div className="flex flex-col items-center h-full justify-between select-none">
+      <span className="text-[9px] font-mono font-medium text-neutral-400">
+        {gain > 0 ? `+${gain.toFixed(0)}` : gain.toFixed(0)}
+      </span>
+
+      <div
+        ref={trackRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        className="relative flex items-center justify-center h-28 w-6 cursor-pointer touch-none py-1 group"
+      >
+        {/* Track groove */}
+        <div className="w-1.5 h-full bg-white/10 rounded-full relative overflow-hidden">
+          {/* Active fill from center 0dB */}
+          <div
+            className="absolute w-full rounded-full transition-all duration-75"
+            style={{
+              backgroundColor: accentColor,
+              bottom: gain >= 0 ? '50%' : `${percent}%`,
+              top: gain >= 0 ? `${100 - percent}%` : '50%',
+            }}
+          />
+        </div>
+
+        {/* Center 0dB tick indicator */}
+        <div className="absolute top-1/2 left-0.5 right-0.5 h-[1px] bg-white/20 pointer-events-none" />
+
+        {/* Fader Knob / Thumb */}
+        <div
+          className="absolute w-4 h-4 rounded-full bg-white shadow-lg border border-black/20 pointer-events-none transition-transform duration-75 group-active:scale-125"
+          style={{
+            bottom: `calc(${percent}% - 8px)`,
+          }}
+        />
+      </div>
+
+      <span className="text-[9px] text-neutral-400 font-mono scale-90 truncate max-w-full">
+        {label}
+      </span>
+    </div>
+  );
+};
 
 export const EqualizerModal: React.FC<EqualizerModalProps> = ({
   isOpen,
@@ -127,28 +208,15 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
             <span>+12 dB</span>
           </div>
 
-          <div className="grid grid-cols-10 gap-1.5 pt-2 items-end h-40">
+          <div className="grid grid-cols-10 gap-1 pt-2 items-end h-40">
             {equalizerBands.map((gain, i) => (
-              <div key={i} className="flex flex-col items-center h-full justify-between group">
-                <span className="text-[9px] font-mono text-neutral-400">
-                  {gain > 0 ? `+${Math.round(gain)}` : Math.round(gain)}
-                </span>
-                <div className="relative flex items-center justify-center h-28 w-4">
-                  <input
-                    type="range"
-                    min={-12}
-                    max={12}
-                    step={1}
-                    value={gain}
-                    onChange={(e) => onBandChange(i, parseFloat(e.target.value))}
-                    className="h-28 w-2 appearance-none bg-white/10 rounded-full cursor-pointer -rotate-90 origin-center"
-                    style={{ accentColor }}
-                  />
-                </div>
-                <span className="text-[9px] text-neutral-400 font-mono scale-90 truncate max-w-full">
-                  {FREQUENCY_LABELS[i]}
-                </span>
-              </div>
+              <VerticalFader
+                key={i}
+                gain={gain}
+                label={FREQUENCY_LABELS[i]}
+                accentColor={accentColor}
+                onChange={(val) => onBandChange(i, val)}
+              />
             ))}
           </div>
         </div>

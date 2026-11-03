@@ -539,7 +539,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => openExternalUrl('https://t.me/liesubbot')}
+                onClick={() => openExternalUrl('https://t.me/lie2srvv')}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-400 text-xs font-medium transition-colors cursor-pointer"
               >
                 <Send size={12} />

@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #151313;
+  color: #E7E1E1;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+/* Hide scrollbars but keep touch scroll active */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Safe area padding for mobile notches and gesture bars */
+.safe-area-pt {
+  padding-top: max(env(safe-area-inset-top), 12px);
+}
+
+.safe-area-pb {
+  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+}
+
+/* Custom vertical range slider for Equalizer */
+input[type="range"].slider-vertical {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #2a2727;
+  border-radius: 9999px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}

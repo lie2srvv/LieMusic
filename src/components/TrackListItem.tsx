@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Play, Heart, Download, Trash2, Check, Loader2 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Track } from '../types';
 import { translations, Language } from '../i18n/translations';
 
@@ -85,19 +86,20 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
   };
 
   return (
-    <div
+    <motion.div
       onClick={handleClick}
       onMouseDown={startPressTimer}
       onMouseUp={cancelPressTimer}
       onMouseLeave={cancelPressTimer}
       onTouchStart={startPressTimer}
       onTouchEnd={cancelPressTimer}
-      className={`group relative flex items-center justify-between p-2.5 rounded-2xl transition-all cursor-pointer select-none ${
+      whileTap={{ scale: 0.985 }}
+      className={`group relative flex items-center justify-between p-2.5 rounded-2xl transition-colors cursor-pointer select-none ${
         isSelected
           ? 'bg-white/15 border border-white/20 shadow-lg'
           : isCurrent
           ? 'bg-white/10 shadow-lg'
-          : 'hover:bg-white/5 active:scale-[0.99]'
+          : 'hover:bg-white/5'
       }`}
     >
       <div className="flex items-center space-x-3 min-w-0 flex-1 pr-3">
@@ -182,20 +184,22 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
 
       {/* Action Buttons */}
       <div className="flex items-center space-x-1 shrink-0">
-        <button
+        <motion.button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onToggleFavorite();
           }}
-          className={`p-2 rounded-xl transition-all cursor-pointer ${
+          whileTap={{ scale: 1.3 }}
+          className={`p-2 rounded-xl transition-colors cursor-pointer ${
             isFavorite
-              ? 'text-rose-500 hover:text-rose-400 active:scale-125'
+              ? 'text-rose-500 hover:text-rose-400'
               : 'text-neutral-500 hover:text-white'
           }`}
           title={isFavorite ? t.inFavorites : t.addToFavorites}
         >
           <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
-        </button>
+        </motion.button>
 
         {isDownloading ? (
           <div className="p-2 text-emerald-400" title={t.downloading}>
@@ -203,32 +207,36 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           </div>
         ) : isTrackDownloaded ? (
           onDeleteDownload ? (
-            <button
+            <motion.button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onDeleteDownload();
               }}
+              whileTap={{ scale: 0.85 }}
               className="p-2 text-neutral-500 hover:text-rose-400 transition-colors cursor-pointer"
               title={t.deleteFromDevice}
             >
               <Trash2 size={16} />
-            </button>
+            </motion.button>
           ) : (
             <div className="p-2 text-emerald-400" title={t.downloadedOffline}>
               <Check size={16} className="stroke-[2.5]" />
             </div>
           )
         ) : (
-          <button
+          <motion.button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onDownload?.();
             }}
+            whileTap={{ scale: 0.85 }}
             className="p-2 text-neutral-500 hover:text-white transition-colors cursor-pointer"
             title={t.downloadTrack}
           >
             <Download size={16} />
-          </button>
+          </motion.button>
         )}
 
         <span className="text-xs text-neutral-500 font-mono w-10 text-right">
@@ -236,6 +244,6 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           {(track.duration % 60).toString().padStart(2, '0')}
         </span>
       </div>
-    </div>
+    </motion.div>
   );
 };

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Home, Search, Library, DownloadCloud } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Language, translations } from '../i18n/translations';
 
 export type TabType = 'home' | 'search' | 'library' | 'offline';
@@ -28,33 +29,40 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   return (
     <nav className="w-full bg-[#1D1B1B]/95 backdrop-blur-xl border-t border-white/5 px-2 py-2 safe-area-pb">
-      <div className="max-w-md mx-auto flex items-center justify-around">
+      <div className="max-w-md mx-auto flex items-center justify-around relative">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
 
           return (
-            <button
+            <motion.button
               key={tab.id}
               onClick={() => onChangeTab(tab.id)}
-              className="flex flex-col items-center justify-center py-1 px-4 rounded-2xl transition-all duration-200 active:scale-95 cursor-pointer"
+              whileTap={{ scale: 0.88 }}
+              className="relative flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl cursor-pointer select-none transition-colors"
             >
+              {isActive && (
+                <motion.div
+                  layoutId="active-bottom-nav-pill"
+                  className="absolute inset-0 bg-white/10 rounded-2xl border border-white/10 shadow-sm"
+                  transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                />
+              )}
+
               <div
-                className={`p-1.5 rounded-full transition-all duration-300 ${
-                  isActive ? 'bg-white/10 scale-110' : 'text-neutral-400'
-                }`}
-                style={{ color: isActive ? accentColor : undefined }}
+                className="relative z-10 p-1 rounded-full transition-colors duration-200"
+                style={{ color: isActive ? accentColor : '#9CA3AF' }}
               >
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
               </div>
               <span
-                className={`text-[10px] font-medium mt-0.5 tracking-tight transition-colors ${
+                className={`relative z-10 text-[10px] font-medium mt-0.5 tracking-tight transition-colors duration-200 ${
                   isActive ? 'text-white font-semibold' : 'text-neutral-400'
                 }`}
               >
                 {tab.label}
               </span>
-            </button>
+            </motion.button>
           );
         })}
       </div>

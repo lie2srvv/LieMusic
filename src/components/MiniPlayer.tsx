@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Disc3 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Track } from '../types';
 import { Language, translations } from '../i18n/translations';
 import { getHighResThumbnail } from '../utils/thumbnail';
@@ -20,7 +21,7 @@ interface MiniPlayerProps {
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   currentTrack,
-  language = "ru",
+  language = 'ru',
   isPlaying,
   currentTime,
   duration,
@@ -38,9 +39,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
   return (
     <div className="w-full max-w-md mx-auto px-2.5 pb-2">
-      <div
+      <motion.div
         onClick={onOpenFullPlayer}
-        className="relative overflow-hidden bg-[#211F1F]/95 backdrop-blur-2xl rounded-2xl border border-white/10 p-2.5 flex items-center justify-between shadow-2xl active:scale-[0.99] transition-all cursor-pointer"
+        whileTap={{ scale: 0.985 }}
+        className="relative overflow-hidden bg-[#211F1F]/95 backdrop-blur-2xl rounded-2xl border border-white/10 p-2.5 flex items-center justify-between shadow-2xl transition-all cursor-pointer select-none"
         style={{
           boxShadow: `0 8px 24px -6px ${glowColor}`,
         }}
@@ -89,17 +91,21 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
         {/* Controls */}
         <div className="flex items-center space-x-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <button
+          <motion.button
+            type="button"
             onClick={onPrev}
-            className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-neutral-400 hover:text-white transition-transform active:scale-90 cursor-pointer"
+            whileTap={{ scale: 0.82 }}
+            className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
             title={t.prev}
           >
             <SkipBack size={18} />
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            type="button"
             onClick={onTogglePlay}
-            className="w-10 h-10 rounded-full shrink-0 aspect-square flex items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-md"
+            whileTap={{ scale: 0.88 }}
+            className="w-10 h-10 rounded-full shrink-0 aspect-square flex items-center justify-center transition-all cursor-pointer shadow-md"
             style={{ backgroundColor: accentColor, color: '#151313' }}
             title={isPlaying ? t.pause : t.play}
           >
@@ -108,17 +114,19 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
             ) : (
               <Play size={17} fill="#151313" className="ml-0.5" />
             )}
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            type="button"
             onClick={onNext}
-            className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-neutral-400 hover:text-white transition-transform active:scale-90 cursor-pointer"
+            whileTap={{ scale: 0.82 }}
+            className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
             title={t.next}
           >
             <SkipForward size={18} />
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

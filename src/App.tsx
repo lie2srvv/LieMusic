@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Search,
   DownloadCloud,
@@ -517,36 +518,50 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.9 }}
             onClick={() => {
               const next = language === 'ru' ? 'en' : 'ru';
               setLanguage(next);
               localStorage.setItem('liemusic_language', next);
             }}
-            className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-neutral-300 hover:text-white transition-all border border-white/5 cursor-pointer active:scale-95"
+            className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-neutral-300 hover:text-white transition-colors border border-white/5 cursor-pointer"
             title={language === 'ru' ? 'Switch to English' : 'Переключить на русский'}
           >
             {language.toUpperCase()}
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.9 }}
             onClick={() => setIsEqualizerOpen(true)}
-            className="w-9 h-9 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-all border border-white/5 cursor-pointer active:scale-95"
+            className="w-9 h-9 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-colors border border-white/5 cursor-pointer"
             title={t.equalizer}
           >
             <Sliders size={18} />
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.9 }}
             onClick={() => setIsSettingsOpen(true)}
-            className="w-9 h-9 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-all border border-white/5 cursor-pointer active:scale-95"
+            className="w-9 h-9 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-colors border border-white/5 cursor-pointer"
             title={t.settings}
           >
             <Settings size={18} />
-          </button>
+          </motion.button>
         </div>
       </header>
 
       {/* Main Content View */}
       <main className="flex-1 overflow-y-auto px-4 py-4 pb-44">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+          >
         {/* TAB 1: HOME */}
         {activeTab === 'home' && (
           <div className="max-w-xl mx-auto space-y-5">
@@ -1066,26 +1081,37 @@ export const App: React.FC = () => {
             </div>
           </div>
         )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Bottom Floating Player + Navigation Bar Container */}
       <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none">
-        {currentTrack && (
-          <div className="pointer-events-auto">
-            <MiniPlayer
-              currentTrack={currentTrack}
-              isPlaying={isPlaying}
-              currentTime={currentTime}
-              duration={duration}
-              accentColor={palette.accent}
-              glowColor={palette.glow}
-              onTogglePlay={handleTogglePlay}
-              onPrev={handlePrevTrack}
-              onNext={handleNextTrack}
-              onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-            />
-          </div>
-        )}
+        <AnimatePresence>
+          {currentTrack && (
+            <motion.div
+              key="miniplayer-animated-wrap"
+              initial={{ y: 50, opacity: 0, scale: 0.95 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 50, opacity: 0, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+              className="pointer-events-auto"
+            >
+              <MiniPlayer
+                currentTrack={currentTrack}
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                duration={duration}
+                accentColor={palette.accent}
+                glowColor={palette.glow}
+                onTogglePlay={handleTogglePlay}
+                onPrev={handlePrevTrack}
+                onNext={handleNextTrack}
+                onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="pointer-events-auto">
           <BottomNav

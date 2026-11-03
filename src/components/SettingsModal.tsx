@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
   HardDrive,
@@ -118,7 +119,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return `${mb.toFixed(1)} ${t.mb}`;
   }, [downloadedTracks, t.mb]);
 
-  if (!isOpen) return null;
 
   const handleCellularToggle = () => {
     const next = !allowCellular;
@@ -155,8 +155,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-[#161414] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key="settings-modal"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={onClose}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md"
+        >
+          <motion.div
+            initial={{ y: '100%', opacity: 0.8 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#161414] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+          >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-white/5 bg-[#1A1818]/80 backdrop-blur-md">
           <div className="flex items-center space-x-3">
@@ -548,7 +565,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

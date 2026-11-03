@@ -15,7 +15,15 @@ import {
   Download,
   FolderPlus,
   SlidersHorizontal,
+  Plus,
+  ListMusic,
+  ChevronRight,
 } from 'lucide-react';
+import { Playlist } from './types';
+import { HeartPlaylistCover } from './components/HeartPlaylistCover';
+import { TrackContextMenuModal } from './components/TrackContextMenuModal';
+import { CreatePlaylistModal } from './components/CreatePlaylistModal';
+import { PlaylistDetailView } from './components/PlaylistDetailView';
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { CellularDownloadModal } from './components/CellularDownloadModal';
 import { isCellularConnection } from './utils/network';
@@ -113,7 +121,6 @@ export const App: React.FC = () => {
 
   // Section expand states (default 3 items)
   const [isHomeHistoryExpanded, setIsHomeHistoryExpanded] = useState<boolean>(false);
-  const [isLibraryHistoryExpanded, setIsLibraryHistoryExpanded] = useState<boolean>(false);
   const [isFavoritesExpanded, setIsFavoritesExpanded] = useState<boolean>(false);
 
   // Multi-select states
@@ -123,11 +130,61 @@ export const App: React.FC = () => {
   const [isOfflineSelectMode, setIsOfflineSelectMode] = useState<boolean>(false);
   const [selectedOfflineIds, setSelectedOfflineIds] = useState<Set<string>>(new Set());
 
+  // User Playlists & Selection states
+  const [userPlaylists, setUserPlaylists] = useState<Playlist[]>(() => {
+    const cached = localStorage.getItem('liemusic_playlists');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (err) {
+        console.warn('[LieMusic] Failed to parse playlists cache:', err);
+      }
+    }
+    return [];
+  });
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState<boolean>(false);
+  const [contextMenuTrack, setContextMenuTrack] = useState<Track | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('liemusic_playlists', JSON.stringify(userPlaylists));
+    } catch (err) {
+      console.warn('[LieMusic] Failed to persist playlists:', err);
+    }
+  }, [userPlaylists]);
+
+  const activePlaylist = useMemo<Playlist | null>(() => {
+    if (!activePlaylistId) return null;
+    if (activePlaylistId === 'system_favorites' || activePlaylistId === 'favorites') {
+      return {
+        id: 'system_favorites',
+        title: t.likePlaylist,
+        tracks: favorites,
+        createdAt: '',
+        isSystem: true,
+      };
+    }
+    if (activePlaylistId === 'system_history' || activePlaylistId === 'history') {
+      return {
+        id: 'system_history',
+        title: t.recentlyPlayed,
+        tracks: history,
+        createdAt: '',
+        isSystem: true,
+      };
+    }
+    return userPlaylists.find((p) => p.id === activePlaylistId) || null;
+  }, [activePlaylistId, favorites, history, userPlaylists, t]);
+
   // Dialog prompts
   const [deletePrompt, setDeletePrompt] = useState<{ trackIds: string[]; trackTitle?: string } | null>(null);
   const [cellularPrompt, setCellularPrompt] = useState<{ tracks: Track[] } | null>(null);
 
   const canGoBack = Boolean(
+    contextMenuTrack ||
+    isCreatePlaylistOpen ||
+    activePlaylistId ||
     isFullPlayerOpen ||
     isEqualizerOpen ||
     isSettingsOpen ||
@@ -147,6 +204,18 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleBackPressed = () => {
+      if (contextMenuTrack) {
+        setContextMenuTrack(null);
+        return;
+      }
+      if (isCreatePlaylistOpen) {
+        setIsCreatePlaylistOpen(false);
+        return;
+      }
+      if (activePlaylistId) {
+        setActivePlaylistId(null);
+        return;
+      }
       if (deletePrompt) {
         setDeletePrompt(null);
         return;
@@ -195,6 +264,9 @@ export const App: React.FC = () => {
       window.removeEventListener('android_back_pressed', handleBackPressed);
     };
   }, [
+    contextMenuTrack,
+    isCreatePlaylistOpen,
+    activePlaylistId,
     deletePrompt,
     cellularPrompt,
     isLanguageModalOpen,
@@ -492,6 +564,65 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleCreatePlaylist = (title: string, description: string) => {
+    const newPl: Playlist = {
+      id: `pl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      title,
+      description: description || undefined,
+      tracks: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setUserPlaylists((prev) => [newPl, ...prev]);
+    return newPl.id;
+  };
+
+  const handleAddToPlaylist = (playlistId: string, track: Track) => {
+    setUserPlaylists((prev) =>
+      prev.map((pl) => {
+        if (pl.id !== playlistId) return pl;
+        if (pl.tracks.some((t) => t.id === track.id)) return pl;
+        return {
+          ...pl,
+          tracks: [track, ...pl.tracks],
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+  };
+
+  const handleRemoveTrackFromPlaylist = (playlistId: string, trackId: string) => {
+    setUserPlaylists((prev) =>
+      prev.map((pl) => {
+        if (pl.id !== playlistId) return pl;
+        return {
+          ...pl,
+          tracks: pl.tracks.filter((t) => t.id !== trackId),
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+  };
+
+  const handleDeletePlaylist = (playlistId: string) => {
+    setUserPlaylists((prev) => prev.filter((pl) => pl.id !== playlistId));
+    if (activePlaylistId === playlistId) {
+      setActivePlaylistId(null);
+    }
+  };
+
+  const handlePlayNext = (track: Track) => {
+    if (currentTrack) {
+      const curIdx = queue.findIndex((t) => t.id === currentTrack.id);
+      const nextQueue = queue.filter((t) => t.id !== track.id);
+      const targetIdx = curIdx >= 0 ? curIdx + 1 : 0;
+      nextQueue.splice(targetIdx, 0, track);
+      setQueue(nextQueue);
+    } else {
+      handlePlayTrack(track, [track]);
+    }
+  };
+
   const handleImportLocalFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -551,6 +682,22 @@ export const App: React.FC = () => {
         };
 
         setDownloadedTracks((prev) => [localTrack, ...prev.filter((t) => t.id !== localTrack.id)]);
+
+        if (activePlaylistId === 'system_favorites' || activePlaylistId === 'favorites') {
+          setFavorites((prev) => [localTrack, ...prev.filter((t) => t.id !== localTrack.id)]);
+        } else if (activePlaylistId && activePlaylistId !== 'system_history' && activePlaylistId !== 'history') {
+          setUserPlaylists((prev) =>
+            prev.map((pl) =>
+              pl.id === activePlaylistId
+                ? {
+                    ...pl,
+                    tracks: [localTrack, ...pl.tracks.filter((t) => t.id !== localTrack.id)],
+                    updatedAt: new Date().toISOString(),
+                  }
+                : pl
+            )
+          );
+        }
       } catch (err) {
         console.error('[LieMusic] Error importing local file:', err);
       }
@@ -967,6 +1114,7 @@ export const App: React.FC = () => {
                         onPlay={() => handlePlayTrack(track, history)}
                         onToggleFavorite={() => handleToggleFavorite(track)}
                         onDownload={() => requestDownloadTrack(track)}
+                        onLongPress={() => setContextMenuTrack(track)}
                       />
                     ))}
                     {history.length > 3 && (
@@ -1132,6 +1280,7 @@ export const App: React.FC = () => {
                     onPlay={() => handlePlayTrack(track, searchResults)}
                     onToggleFavorite={() => handleToggleFavorite(track)}
                     onDownload={() => requestDownloadTrack(track)}
+                    onLongPress={() => setContextMenuTrack(track)}
                   />
                 ))
               ) : searchQuery || searchArtistQuery ? (
@@ -1150,205 +1299,319 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: LIBRARY */}
+        {/* TAB 3: LIBRARY (Albums & Playlists Hub) */}
         {activeTab === 'library' && (
-          <div className="max-w-xl mx-auto space-y-6">
-            {/* Favorites Section */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-                  <Heart size={16} className="text-rose-500 fill-rose-500" />
-                  <span>{t.favoriteTracks} ({favorites.length})</span>
-                </h3>
-                {favorites.length > 0 && (
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={handleDownloadAllFavorites}
-                      disabled={favorites.every((f) => downloadedTrackIds.has(f.id))}
-                      className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
-                      title={t.downloadAllTooltip}
-                    >
-                      <Download size={13} />
-                      <span>{t.downloadAll}</span>
-                    </button>
-                    <span className="text-neutral-600 text-xs">·</span>
-                    <button
-                      onClick={() => handlePlayTrack(favorites[0], favorites)}
-                      className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer whitespace-nowrap"
-                    >
-                      {t.playAll}
-                    </button>
+          activePlaylist ? (
+            <PlaylistDetailView
+              playlist={activePlaylist}
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              favoriteTrackIds={favoriteTrackIds}
+              downloadedTrackIds={downloadedTrackIds}
+              downloadingIds={downloadingIds}
+              accentColor={palette.accent}
+              glowColor={palette.glow}
+              language={language}
+              onBack={() => setActivePlaylistId(null)}
+              onPlayTrack={(track, q) => handlePlayTrack(track, q)}
+              onPlayAll={(tracks) => tracks.length > 0 && handlePlayTrack(tracks[0], tracks)}
+              onToggleFavorite={handleToggleFavorite}
+              onDownloadTrack={requestDownloadTrack}
+              onTrackLongPress={(track) => setContextMenuTrack(track)}
+              onRemoveTrackFromPlaylist={
+                activePlaylist.isSystem
+                  ? undefined
+                  : (trackId) => handleRemoveTrackFromPlaylist(activePlaylist.id, trackId)
+              }
+              onDeletePlaylist={
+                activePlaylist.isSystem
+                  ? undefined
+                  : () => handleDeletePlaylist(activePlaylist.id)
+              }
+              onUploadLocalTrack={handleImportLocalFiles}
+            />
+          ) : (
+            <div className="max-w-xl mx-auto space-y-6">
+              {/* 2 Primary System Album Cards: Favorites & Recently Played */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Мне нравится / Favorites */}
+                <div
+                  onClick={() => setActivePlaylistId('system_favorites')}
+                  className="relative p-3.5 rounded-3xl bg-gradient-to-br from-rose-950/30 via-[#1C1A1B] to-[#151313] border border-rose-500/15 flex items-center justify-between cursor-pointer group hover:border-rose-500/35 transition-all shadow-xl active:scale-[0.99]"
+                >
+                  <div className="flex items-center space-x-3.5 min-w-0">
+                    <HeartPlaylistCover size={54} className="rounded-2xl shrink-0" />
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-white group-hover:text-rose-200 transition-colors truncate">
+                        {t.likePlaylist}
+                      </h3>
+                      <p className="text-xs text-neutral-400 truncate">
+                        {t.tracksCount(favorites.length)}
+                      </p>
+                    </div>
                   </div>
-                )}
+                  {favorites.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayTrack(favorites[0], favorites);
+                      }}
+                      className="w-10 h-10 rounded-full bg-rose-500 hover:bg-rose-400 text-white flex items-center justify-center transition-transform active:scale-95 shadow-md shadow-rose-500/30 cursor-pointer shrink-0 ml-2"
+                      title={t.playAll}
+                    >
+                      <Play size={16} className="fill-white translate-x-0.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Недавно слушали / Recently Played */}
+                <div
+                  onClick={() => setActivePlaylistId('system_history')}
+                  className="relative p-3.5 rounded-3xl bg-[#1C1A1B] border border-white/10 flex items-center justify-between cursor-pointer group hover:border-white/20 transition-all shadow-xl active:scale-[0.99]"
+                >
+                  <div className="flex items-center space-x-3.5 min-w-0">
+                    <div className="w-[54px] h-[54px] rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-neutral-300 shrink-0">
+                      <Clock size={24} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-white group-hover:text-neutral-200 transition-colors truncate">
+                        {t.recentlyPlayed}
+                      </h3>
+                      <p className="text-xs text-neutral-400 truncate">
+                        {t.tracksCount(history.length)}
+                      </p>
+                    </div>
+                  </div>
+                  {history.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayTrack(history[0], history);
+                      }}
+                      className="w-10 h-10 rounded-full bg-white text-black hover:bg-neutral-200 flex items-center justify-center transition-transform active:scale-95 shadow-md cursor-pointer shrink-0 ml-2"
+                      title={t.playAll}
+                    >
+                      <Play size={16} className="fill-black translate-x-0.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Selection action bar for Favorites */}
-              {isFavSelectMode && favorites.length > 0 && (
-                <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/10 text-xs">
-                  <span className="font-medium text-neutral-300">
-                    {t.selected}: {selectedFavIds.size} {t.of} {favorites.length}
+              {/* "Мои плейлисты" Section with + New Playlist and horizontal cards */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-base font-bold text-white flex items-center space-x-1.5">
+                    <span>{t.myPlaylists}</span>
+                    <ChevronRight size={18} className="text-neutral-500" />
+                  </h3>
+                  <span className="text-xs text-neutral-500 font-medium">
+                    {userPlaylists.length}
                   </span>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => {
-                        if (selectedFavIds.size === favorites.length) {
-                          setSelectedFavIds(new Set());
-                        } else {
-                          setSelectedFavIds(new Set(favorites.map((t) => t.id)));
-                        }
-                      }}
-                      className="text-neutral-400 hover:text-white px-2 py-1 rounded-lg bg-white/5 cursor-pointer"
-                    >
-                      {selectedFavIds.size === favorites.length ? t.deselectAll : t.all}
-                    </button>
-                    {selectedFavIds.size > 0 && (
-                      <>
-                        <button
-                          onClick={() => {
-                            const selected = favorites.filter((t) => selectedFavIds.has(t.id));
-                            requestDownloadMultiple(selected);
-                          }}
-                          className="text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
-                        >
-                          <Download size={13} />
-                          <span>{t.downloadCount(selectedFavIds.size)}</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setFavorites((prev) => prev.filter((t) => !selectedFavIds.has(t.id)));
-                            setSelectedFavIds(new Set());
-                            setIsFavSelectMode(false);
-                          }}
-                          className="text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
-                        >
-                          <Trash2 size={13} />
-                          <span>{t.remove}</span>
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => {
-                        setIsFavSelectMode(false);
-                        setSelectedFavIds(new Set());
-                      }}
-                      className="text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg bg-white/10 cursor-pointer font-medium"
-                    >
-                      {t.done}
-                    </button>
-                  </div>
                 </div>
-              )}
 
-              <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
-                {favorites.length > 0 ? (
-                  <>
-                    {(isFavoritesExpanded ? favorites : favorites.slice(0, 3)).map((track) => (
-                      <TrackListItem
-                        language={language}
-                        key={`fav_${track.id}`}
-                        track={track}
-                        isCurrent={currentTrack?.id === track.id}
-                        isPlaying={isPlaying}
-                        isFavorite={true}
-                        isDownloaded={downloadedTrackIds.has(track.id)}
-                        isDownloading={downloadingIds.has(track.id)}
-                        fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
-                        accentColor={palette.accent}
-                        isSelectMode={isFavSelectMode}
-                        isSelected={selectedFavIds.has(track.id)}
-                        onSelect={() => toggleSelectFav(track.id)}
-                        onLongPress={() => {
-                          setIsFavoritesExpanded(true);
-                          setIsFavSelectMode(true);
-                          toggleSelectFav(track.id);
-                        }}
-                        onPlay={() => handlePlayTrack(track, favorites)}
-                        onToggleFavorite={() => handleToggleFavorite(track)}
-                        onDownload={() => requestDownloadTrack(track)}
-                      />
-                    ))}
-                    {favorites.length > 3 && (
-                      <button
-                        onClick={() => setIsFavoritesExpanded((prev) => !prev)}
-                        className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
-                      >
-                        <span>{isFavoritesExpanded ? t.showLess : t.showMore(favorites.length)}</span>
-                        {isFavoritesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <div className="py-12 text-center text-neutral-500 space-y-1">
-                    <p className="text-xs">{t.noFavoritesYet}</p>
-                    <p className="text-[11px] text-neutral-600">
-                      {t.noFavoritesDesc}
+                <div className="flex space-x-3 overflow-x-auto pb-2 pt-1 no-scrollbar -mx-1 px-1">
+                  {/* Card: + Новый плейлист (matching user screenshot 2) */}
+                  <div
+                    onClick={() => setIsCreatePlaylistOpen(true)}
+                    className="w-32 shrink-0 cursor-pointer group"
+                  >
+                    <div className="aspect-square rounded-2xl bg-[#1D1B1B] border border-white/10 flex items-center justify-center text-neutral-400 group-hover:text-white group-hover:border-white/20 transition-all active:scale-95 shadow-md">
+                      <Plus size={36} strokeWidth={1.75} />
+                    </div>
+                    <p className="mt-2 text-xs font-semibold text-white truncate text-center group-hover:text-neutral-200">
+                      {t.newPlaylist}
                     </p>
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* History Section */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-                  <Clock size={16} className="text-neutral-400" />
-                  <span>{t.recentlyPlayed} ({history.length})</span>
-                </h3>
-                {history.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setHistory([]);
-                      localStorage.removeItem('liemusic_history');
-                    }}
-                    className="text-xs text-neutral-400 hover:text-neutral-200 cursor-pointer flex items-center space-x-1"
-                  >
-                    <Trash2 size={13} />
-                    <span>{t.clear}</span>
-                  </button>
-                )}
+                  {/* User Playlist Cards */}
+                  {userPlaylists.map((pl) => (
+                    <div
+                      key={pl.id}
+                      onClick={() => setActivePlaylistId(pl.id)}
+                      className="w-32 shrink-0 cursor-pointer group"
+                    >
+                      <div className="aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-neutral-800 to-neutral-900 border border-white/10 flex items-center justify-center relative shadow-md group-hover:border-white/20 transition-all active:scale-95">
+                        {pl.coverUrl ? (
+                          <img
+                            src={pl.coverUrl}
+                            alt={pl.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ListMusic size={36} className="text-white/60" />
+                        )}
+                        {pl.tracks.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePlayTrack(pl.tracks[0], pl.tracks);
+                            }}
+                            className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-transform opacity-90 hover:opacity-100"
+                          >
+                            <Play size={13} className="fill-black translate-x-0.5" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-white truncate group-hover:text-neutral-200">
+                        {pl.title}
+                      </p>
+                      <p className="text-[11px] text-neutral-400 truncate">
+                        {t.tracksCount(pl.tracks.length)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
-                {history.length > 0 ? (
-                  <>
-                    {(isLibraryHistoryExpanded ? history : history.slice(0, 3)).map((track) => (
-                      <TrackListItem
-                        language={language}
-                        key={`lib_hist_${track.id}`}
-                        track={track}
-                        isCurrent={currentTrack?.id === track.id}
-                        isPlaying={isPlaying}
-                        isFavorite={favoriteTrackIds.has(track.id)}
-                        isDownloaded={downloadedTrackIds.has(track.id)}
-                        isDownloading={downloadingIds.has(track.id)}
-                        fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
-                        accentColor={palette.accent}
-                        onPlay={() => handlePlayTrack(track, history)}
-                        onToggleFavorite={() => handleToggleFavorite(track)}
-                        onDownload={() => requestDownloadTrack(track)}
-                      />
-                    ))}
-                    {history.length > 3 && (
+              {/* Favorites Quick List Section below */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                    <Heart size={16} className="text-rose-500 fill-rose-500" />
+                    <span>{t.favoriteTracks} ({favorites.length})</span>
+                  </h3>
+                  {favorites.length > 0 && (
+                    <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => setIsLibraryHistoryExpanded((prev) => !prev)}
-                        className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
+                        onClick={handleDownloadAllFavorites}
+                        disabled={favorites.every((f) => downloadedTrackIds.has(f.id))}
+                        className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                        title={t.downloadAllTooltip}
                       >
-                        <span>{isLibraryHistoryExpanded ? t.showLess : t.showMore(history.length)}</span>
-                        {isLibraryHistoryExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        <Download size={13} />
+                        <span>{t.downloadAll}</span>
                       </button>
-                    )}
-                  </>
-                ) : (
-                  <div className="py-12 text-center text-neutral-500">
-                    <p className="text-xs">{t.emptyRecent}</p>
+                      <span className="text-neutral-600 text-xs">·</span>
+                      <button
+                        onClick={() => handlePlayTrack(favorites[0], favorites)}
+                        className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer whitespace-nowrap"
+                      >
+                        {t.playAll}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Selection action bar for Favorites */}
+                {isFavSelectMode && favorites.length > 0 && (
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/10 text-xs">
+                    <span className="font-medium text-neutral-300">
+                      {t.selected}: {selectedFavIds.size} {t.of} {favorites.length}
+                    </span>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => {
+                          if (selectedFavIds.size === favorites.length) {
+                            setSelectedFavIds(new Set());
+                          } else {
+                            setSelectedFavIds(new Set(favorites.map((t) => t.id)));
+                          }
+                        }}
+                        className="text-neutral-400 hover:text-white px-2 py-1 rounded-lg bg-white/5 cursor-pointer"
+                      >
+                        {selectedFavIds.size === favorites.length ? t.deselectAll : t.all}
+                      </button>
+                      {selectedFavIds.size > 0 && (
+                        <>
+                          {(() => {
+                            const unDownloaded = favorites.filter(
+                              (t) => selectedFavIds.has(t.id) && !downloadedTrackIds.has(t.id)
+                            );
+                            if (unDownloaded.length === 0) return null;
+                            return (
+                              <button
+                                onClick={() => {
+                                  requestDownloadMultiple(unDownloaded);
+                                }}
+                                className="text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
+                              >
+                                <Download size={13} />
+                                <span>{t.downloadCount(unDownloaded.length)}</span>
+                              </button>
+                            );
+                          })()}
+                          <button
+                            onClick={() => {
+                              setFavorites((prev) => prev.filter((t) => !selectedFavIds.has(t.id)));
+                              setSelectedFavIds(new Set());
+                              setIsFavSelectMode(false);
+                            }}
+                            className="text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
+                          >
+                            <Trash2 size={13} />
+                            <span>{t.remove}</span>
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => {
+                          setIsFavSelectMode(false);
+                          setSelectedFavIds(new Set());
+                        }}
+                        className="text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg bg-white/10 cursor-pointer font-medium"
+                      >
+                        {t.done}
+                      </button>
+                    </div>
                   </div>
                 )}
+
+                <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
+                  {favorites.length > 0 ? (
+                    <>
+                      {(isFavoritesExpanded ? favorites : favorites.slice(0, 3)).map((track) => (
+                        <TrackListItem
+                          language={language}
+                          key={`fav_${track.id}`}
+                          track={track}
+                          isCurrent={currentTrack?.id === track.id}
+                          isPlaying={isPlaying}
+                          isFavorite={true}
+                          isDownloaded={downloadedTrackIds.has(track.id)}
+                          isDownloading={downloadingIds.has(track.id)}
+                          fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
+                          accentColor={palette.accent}
+                          isSelectMode={isFavSelectMode}
+                          isSelected={selectedFavIds.has(track.id)}
+                          onSelect={() => toggleSelectFav(track.id)}
+                          onLongPress={() => {
+                            if (isFavSelectMode) {
+                              toggleSelectFav(track.id);
+                            } else {
+                              setContextMenuTrack(track);
+                            }
+                          }}
+                          onPlay={() => handlePlayTrack(track, favorites)}
+                          onToggleFavorite={() => handleToggleFavorite(track)}
+                          onDownload={() => requestDownloadTrack(track)}
+                        />
+                      ))}
+                      {favorites.length > 3 && (
+                        <button
+                          onClick={() => setIsFavoritesExpanded((prev) => !prev)}
+                          className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
+                        >
+                          <span>{isFavoritesExpanded ? t.showLess : t.showMore(favorites.length)}</span>
+                          {isFavoritesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="py-12 text-center text-neutral-500 space-y-1">
+                      <p className="text-xs">{t.noFavoritesYet}</p>
+                      <p className="text-[11px] text-neutral-600">
+                        {t.noFavoritesDesc}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )
         )}
-
         {/* TAB 4: OFFLINE */}
         {activeTab === 'offline' && (
           <div className="max-w-xl mx-auto space-y-4">
@@ -1449,8 +1712,11 @@ export const App: React.FC = () => {
                     isSelected={selectedOfflineIds.has(track.id)}
                     onSelect={() => toggleSelectOffline(track.id)}
                     onLongPress={() => {
-                      setIsOfflineSelectMode(true);
-                      toggleSelectOffline(track.id);
+                      if (isOfflineSelectMode) {
+                        toggleSelectOffline(track.id);
+                      } else {
+                        setContextMenuTrack(track);
+                      }
                     }}
                     onPlay={() => handlePlayTrack(track, downloadedTracks)}
                     onToggleFavorite={() => handleToggleFavorite(track)}
@@ -1505,7 +1771,12 @@ export const App: React.FC = () => {
           <BottomNav
             activeTab={activeTab}
             language={language}
-            onChangeTab={setActiveTab}
+            onChangeTab={(tab) => {
+              setActiveTab(tab);
+              if (tab !== 'library') {
+                setActivePlaylistId(null);
+              }
+            }}
             accentColor={palette.accent}
           />
         </div>
@@ -1568,6 +1839,61 @@ export const App: React.FC = () => {
             setEqualizerBands(preset.bands);
             setBassBoost(preset.bassBoost || 0);
             audioEngine.applyPreset(preset);
+          }
+        }}
+      />
+
+      {/* Context Menu Modal for long-pressed tracks */}
+      <TrackContextMenuModal
+        isOpen={!!contextMenuTrack}
+        track={contextMenuTrack}
+        isFavorite={contextMenuTrack ? favoriteTrackIds.has(contextMenuTrack.id) : false}
+        isDownloaded={contextMenuTrack ? downloadedTrackIds.has(contextMenuTrack.id) : false}
+        playlists={userPlaylists}
+        accentColor={palette.accent}
+        language={language}
+        onClose={() => setContextMenuTrack(null)}
+        onSelectMode={() => {
+          if (!contextMenuTrack) return;
+          if (activeTab === 'offline') {
+            setIsOfflineSelectMode(true);
+            setSelectedOfflineIds(new Set([contextMenuTrack.id]));
+          } else {
+            setIsFavoritesExpanded(true);
+            setIsFavSelectMode(true);
+            setSelectedFavIds(new Set([contextMenuTrack.id]));
+          }
+        }}
+        onToggleFavorite={() => {
+          if (contextMenuTrack) handleToggleFavorite(contextMenuTrack);
+        }}
+        onDownload={() => {
+          if (contextMenuTrack) requestDownloadTrack(contextMenuTrack);
+        }}
+        onDeleteDownload={() => {
+          if (contextMenuTrack) requestDeleteDownload(contextMenuTrack.id, contextMenuTrack.title);
+        }}
+        onAddToPlaylist={(playlistId) => {
+          if (contextMenuTrack) handleAddToPlaylist(playlistId, contextMenuTrack);
+        }}
+        onCreatePlaylist={() => {
+          setIsCreatePlaylistOpen(true);
+        }}
+        onPlayNext={() => {
+          if (contextMenuTrack) handlePlayNext(contextMenuTrack);
+        }}
+      />
+
+      {/* Create Playlist Modal */}
+      <CreatePlaylistModal
+        isOpen={isCreatePlaylistOpen}
+        accentColor={palette.accent}
+        language={language}
+        onClose={() => setIsCreatePlaylistOpen(false)}
+        onCreate={(title, desc) => {
+          const newId = handleCreatePlaylist(title, desc);
+          if (contextMenuTrack) {
+            handleAddToPlaylist(newId, contextMenuTrack);
           }
         }}
       />

@@ -276,10 +276,27 @@ class AudioEngine {
     this.syncAndroidNotification(false);
   }
 
+  private seekSyncTimer: any = null;
+
   public seek(seconds: number) {
     if (!isNaN(seconds) && isFinite(seconds)) {
-      this.audio.currentTime = Math.max(0, Math.min(seconds, this.audio.duration || 9999));
-      this.syncAndroidNotification(!this.audio.paused);
+      const maxDuration = isNaN(this.audio.duration) ? (this.currentTrack?.duration || 9999) : this.audio.duration;
+      const target = Math.max(0, Math.min(seconds, maxDuration));
+
+      try {
+        if (typeof (this.audio as any).fastSeek === 'function') {
+          (this.audio as any).fastSeek(target);
+        } else {
+          this.audio.currentTime = target;
+        }
+      } catch {
+        this.audio.currentTime = target;
+      }
+
+      if (this.seekSyncTimer) clearTimeout(this.seekSyncTimer);
+      this.seekSyncTimer = setTimeout(() => {
+        this.syncAndroidNotification(!this.audio.paused);
+      }, 60);
     }
   }
 

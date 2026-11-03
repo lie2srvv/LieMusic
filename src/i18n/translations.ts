@@ -35,7 +35,7 @@ export const translations = {
     searchNoResults: 'Ничего не найдено',
     searchNoResultsDesc: 'Попробуйте изменить поисковый запрос',
 
-    // Home sections
+    // Home & Library sections
     favoriteTracks: 'Любимые треки',
     offlineMusic: 'Офлайн музыка',
     recentlyPlayed: 'Недавно слушали',
@@ -79,6 +79,38 @@ export const translations = {
     longPressToSelect: 'Удерживайте для выбора',
     mb: 'МБ',
 
+    // Playlists & Albums
+    playlists: 'Плейлисты',
+    myPlaylists: 'Мои плейлисты',
+    newPlaylist: 'Новый плейлист',
+    createPlaylist: 'Создать плейлист',
+    editPlaylist: 'Редактировать плейлист',
+    playlistName: 'Название плейлиста',
+    playlistDescription: 'Описание плейлиста',
+    enterPlaylistName: 'Введите название...',
+    enterPlaylistDesc: 'Добавить описание...',
+    addCover: 'Добавить обложку',
+    changeCover: 'Изменить обложку',
+    addToPlaylist: 'Добавить в плейлист',
+    selectPlaylist: 'Выберите плейлист',
+    removeFromPlaylist: 'Удалить из плейлиста',
+    deletePlaylist: 'Удалить плейлист',
+    deletePlaylistConfirm: 'Удалить этот плейлист? Треки останутся в медиатеке.',
+    playlistEmpty: 'В плейлисте пока нет треков',
+    playlistEmptyDesc: 'Добавляйте треки из поиска или загружайте аудиофайлы',
+    searchInsidePlaylist: 'Поиск трека',
+    uploadTrack: 'Загрузить трек',
+    likePlaylist: 'Мне нравится',
+    playlistLabel: 'Плейлист',
+    updatedToday: (author: string) => `${author} обновил плейлист сегодня`,
+    playNext: 'Воспроизвести следующим',
+    trackAddedToPlaylist: 'Трек добавлен в плейлист',
+    trackAlreadyInPlaylist: 'Трек уже в плейлисте',
+    selectMultiple: 'Выбрать',
+    trackOptions: 'Опции трека',
+    openPlaylist: 'Открыть плейлист',
+    listen: 'Слушать',
+
     // Confirm Delete Modal
     deleteTitleSingle: 'Удалить трек?',
     deleteTitleMultiple: 'Удалить выбранные треки?',
@@ -86,6 +118,7 @@ export const translations = {
     deleteMessageMultiple: (count: number) => `${count} треков будут удалены из памяти устройства.`,
     deleteNotice: 'Трек больше не будет доступен офлайн без интернета. Вы всегда сможете скачать его снова.',
     dontAskAgain: 'Не спрашивать больше',
+    confirmDeleteCheckbox: 'Да, я подтверждаю удаление',
     confirmDelete: 'Удалить',
 
     // Cellular Download Modal
@@ -198,7 +231,7 @@ export const translations = {
     searchNoResults: 'No results found',
     searchNoResultsDesc: 'Try adjusting your search keywords',
 
-    // Home sections
+    // Home & Library sections
     favoriteTracks: 'Favorite Tracks',
     offlineMusic: 'Offline Music',
     recentlyPlayed: 'Recently Played',
@@ -242,6 +275,38 @@ export const translations = {
     longPressToSelect: 'Long-press to select',
     mb: 'MB',
 
+    // Playlists & Albums
+    playlists: 'Playlists',
+    myPlaylists: 'My Playlists',
+    newPlaylist: 'New playlist',
+    createPlaylist: 'Create playlist',
+    editPlaylist: 'Edit playlist',
+    playlistName: 'Playlist name',
+    playlistDescription: 'Playlist description',
+    enterPlaylistName: 'Enter playlist name...',
+    enterPlaylistDesc: 'Add description...',
+    addCover: 'Add cover',
+    changeCover: 'Change cover',
+    addToPlaylist: 'Add to playlist',
+    selectPlaylist: 'Select playlist',
+    removeFromPlaylist: 'Remove from playlist',
+    deletePlaylist: 'Delete playlist',
+    deletePlaylistConfirm: 'Delete this playlist? Tracks will remain in library.',
+    playlistEmpty: 'No tracks in this playlist yet',
+    playlistEmptyDesc: 'Add tracks from search or upload local files',
+    searchInsidePlaylist: 'Search track',
+    uploadTrack: 'Upload track',
+    likePlaylist: 'Liked Songs',
+    playlistLabel: 'Playlist',
+    updatedToday: (author: string) => `${author} updated the playlist today`,
+    playNext: 'Play next',
+    trackAddedToPlaylist: 'Track added to playlist',
+    trackAlreadyInPlaylist: 'Track already in playlist',
+    selectMultiple: 'Select',
+    trackOptions: 'Track options',
+    openPlaylist: 'Open playlist',
+    listen: 'Play',
+
     // Confirm Delete Modal
     deleteTitleSingle: 'Delete track?',
     deleteTitleMultiple: 'Delete selected tracks?',
@@ -249,6 +314,7 @@ export const translations = {
     deleteMessageMultiple: (count: number) => `${count} tracks will be removed from your device storage.`,
     deleteNotice: 'Track will no longer be available offline without internet. You can re-download it anytime.',
     dontAskAgain: "Don't ask again",
+    confirmDeleteCheckbox: 'Yes, I confirm deletion',
     confirmDelete: 'Delete',
 
     // Cellular Download Modal

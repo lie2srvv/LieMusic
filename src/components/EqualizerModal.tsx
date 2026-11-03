@@ -160,16 +160,28 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
           onClick={onClose}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 touch-none"
         >
           <motion.div
-            initial={{ y: '100%', opacity: 0.8 }}
+            initial={{ y: '100%', opacity: 0.7 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '100%', opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+            exit={{ y: '100%', opacity: 0.2 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.5 }}
+            dragSnapToOrigin
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 60 || info.velocity.y > 180) {
+                onClose();
+              }
+            }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#181616] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto space-y-6 shadow-2xl"
+            className="bg-[#181616] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-md p-5 pb-7 max-h-[85vh] overflow-y-auto space-y-5 shadow-2xl flex flex-col will-change-transform"
           >
+            {/* Pull down handle */}
+            <div className="w-10 h-1 bg-white/25 rounded-full mx-auto -mt-1 mb-2 shrink-0 cursor-grab active:cursor-grabbing" />
+
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -189,42 +201,40 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
                 </div>
               </div>
 
-              <motion.button
+              <button
                 type="button"
                 onClick={onClose}
-                whileTap={{ scale: 0.88 }}
                 className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X size={18} />
-              </motion.button>
+              </button>
             </div>
 
             {/* Presets Grid */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-neutral-400 flex items-center space-x-1.5 uppercase tracking-wider">
-                <Sparkles size={14} style={{ color: accentColor }} />
+              <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider flex items-center space-x-1.5">
+                <Sparkles size={12} style={{ color: accentColor }} />
                 <span>{t.presets}</span>
-              </label>
+              </span>
               <div className="grid grid-cols-2 gap-2">
                 {presets.map((preset) => {
                   const isActive = activePreset === preset.id;
                   return (
-                    <motion.button
-                      type="button"
+                    <button
                       key={preset.id}
+                      type="button"
                       onClick={() => onSelectPreset(preset.id)}
-                      whileTap={{ scale: 0.94 }}
-                      className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      className={`px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all cursor-pointer border text-left truncate ${
                         isActive
-                          ? 'text-neutral-900 shadow-md font-bold'
-                          : 'bg-white/5 text-neutral-300 hover:bg-white/10'
+                          ? 'border-transparent text-white shadow-lg'
+                          : 'bg-white/5 hover:bg-white/10 text-neutral-300 border-white/5'
                       }`}
                       style={{
-                        backgroundColor: isActive ? '#FFFFFF' : undefined,
+                        backgroundColor: isActive ? accentColor : undefined,
                       }}
                     >
                       {preset.label}
-                    </motion.button>
+                    </button>
                   );
                 })}
               </div>

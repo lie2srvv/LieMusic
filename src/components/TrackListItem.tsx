@@ -211,18 +211,12 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
         </motion.button>
 
         {isTrackDownloaded ? (
-          <motion.button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onDeleteDownload) onDeleteDownload();
-            }}
-            whileTap={{ scale: 0.9 }}
-            className="p-2 text-emerald-400 hover:text-rose-400 transition-colors cursor-pointer"
+          <div
+            className="p-2 text-emerald-400 flex items-center justify-center cursor-default"
             title={t.downloadedOffline}
           >
-            <Download size={18} />
-          </motion.button>
+            <Check size={18} className="stroke-[2.5]" />
+          </div>
         ) : isDownloading ? (
           <div className="p-2 text-neutral-400 animate-spin">
             <Loader2 size={18} />

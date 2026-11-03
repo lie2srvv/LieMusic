@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash2, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { translations, Language } from '../i18n/translations';
@@ -20,8 +20,14 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  const [dontAskAgain, setDontAskAgain] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
   const t = translations[language];
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsConfirmed(false);
+    }
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
@@ -33,15 +39,15 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
           onClick={onCancel}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80"
         >
           <motion.div
-            initial={{ scale: 0.92, opacity: 0, y: 15 }}
+            initial={{ scale: 0.94, opacity: 0, y: 15 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.92, opacity: 0, y: 15 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            exit={{ scale: 0.94, opacity: 0, y: 15 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#1C1A1A] border border-white/10 rounded-3xl w-full max-w-sm p-6 shadow-2xl space-y-4"
+            className="bg-[#1C1A1A] border border-white/10 rounded-3xl w-full max-w-sm p-6 shadow-2xl space-y-4 will-change-transform"
           >
             {/* Header Icon & Title */}
             <div className="flex items-center space-x-3">
@@ -64,22 +70,26 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
               {t.deleteNotice}
             </p>
 
-            {/* Checkbox "Больше не спрашивать" */}
+            {/* Confirmation Checkbox */}
             <label
-              onClick={() => setDontAskAgain((prev) => !prev)}
-              className="flex items-center space-x-3 cursor-pointer select-none py-1 group"
+              onClick={() => setIsConfirmed((prev) => !prev)}
+              className={`flex items-center space-x-3 cursor-pointer select-none py-2.5 px-3 rounded-2xl border transition-all ${
+                isConfirmed
+                  ? 'bg-rose-500/10 border-rose-500/40 text-white shadow-sm'
+                  : 'bg-white/5 border-white/10 text-neutral-300 hover:border-white/25 hover:text-white'
+              }`}
             >
               <div
-                className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all border ${
-                  dontAskAgain
+                className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all border shrink-0 ${
+                  isConfirmed
                     ? 'bg-rose-500 border-rose-500 text-white'
-                    : 'border-white/20 bg-white/5 group-hover:border-white/40'
+                    : 'border-white/30 bg-black/40'
                 }`}
               >
-                {dontAskAgain && <Check size={14} className="stroke-[3] cursor-pointer" />}
+                {isConfirmed && <Check size={14} className="stroke-[3]" />}
               </div>
-              <span className="text-xs font-medium text-neutral-300 group-hover:text-white transition-colors">
-                {t.dontAskAgain}
+              <span className="text-xs font-semibold">
+                {t.confirmDeleteCheckbox}
               </span>
             </label>
 
@@ -95,9 +105,14 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
               </motion.button>
               <motion.button
                 type="button"
-                onClick={() => onConfirm(dontAskAgain)}
-                whileTap={{ scale: 0.94 }}
-                className="py-3 px-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-medium text-sm shadow-lg shadow-rose-900/30 transition-colors cursor-pointer"
+                disabled={!isConfirmed}
+                onClick={() => isConfirmed && onConfirm(false)}
+                whileTap={isConfirmed ? { scale: 0.94 } : undefined}
+                className={`py-3 px-4 rounded-2xl font-semibold text-sm transition-all ${
+                  isConfirmed
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-900/40 cursor-pointer active:scale-95'
+                    : 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-60'
+                }`}
               >
                 {t.confirmDelete}
               </motion.button>

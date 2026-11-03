@@ -30,8 +30,10 @@ export interface EqualizerPreset {
 export interface Playlist {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   coverUrl?: string;
   tracks: Track[];
   createdAt: string;
+  updatedAt?: string;
+  isSystem?: boolean;
 }

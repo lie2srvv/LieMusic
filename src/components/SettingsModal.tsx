@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -92,6 +92,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
 
   const [historyClearedNotice, setHistoryClearedNotice] = useState<boolean>(false);
+  const [isAtTop, setIsAtTop] = useState<boolean>(true);
+
+  // Touch gesture tracker for header swipe dismiss
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartY.current = null;
+    if (dy > 45) {
+      onClose();
+    }
+  };
 
   // Sorted tracks in storage
   const sortedDownloadedTracks = useMemo(() => {
@@ -119,7 +136,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return `${mb.toFixed(1)} ${t.mb}`;
   }, [downloadedTracks, t.mb]);
 
-
   const handleCellularToggle = () => {
     const next = !allowCellular;
     setAllowCellular(next);
@@ -131,7 +147,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleConfirmDeleteToggle = () => {
-    // If dontAskDelete is true, confirm dialog is skipped. Toggling means asking again.
     const next = !dontAskDelete;
     setDontAskDelete(next);
     if (next) {
@@ -164,407 +179,431 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
           onClick={onClose}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 touch-none"
         >
           <motion.div
-            initial={{ y: '100%', opacity: 0.8 }}
+            initial={{ y: '100%', opacity: 0.7 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '100%', opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+            exit={{ y: '100%', opacity: 0.2 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.5 }}
+            dragSnapToOrigin
+            dragListener={isAtTop}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 60 || info.velocity.y > 180) {
+                onClose();
+              }
+            }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#161414] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+            className="bg-[#161414] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[75vh] flex flex-col shadow-2xl overflow-hidden will-change-transform"
           >
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/5 bg-[#1A1818]/80 backdrop-blur-md">
-          <div className="flex items-center space-x-3">
+            {/* Pull-down drag handle bar */}
             <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              className="w-10 h-1 bg-white/25 rounded-full mx-auto mt-2.5 -mb-1 shrink-0 cursor-grab active:cursor-grabbing"
+            />
+
+            {/* Header */}
+            <div
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-[#181616] shrink-0"
             >
-              <SlidersHorizontal size={20} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight">{t.settings}</h2>
-              <p className="text-[11px] text-neutral-400">LieMusic v1.0.0</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          {/* 1. SUPPORT THE PROJECT (YooMoney) */}
-          <div className="p-4 rounded-3xl bg-gradient-to-br from-amber-500/15 via-[#1D1B1B] to-[#171515] border border-amber-500/25 space-y-3.5 shadow-lg relative overflow-hidden">
-            <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
-
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
-                <HeartHandshake size={20} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-bold text-white flex items-center space-x-1.5">
-                  <span>{t.supportProject}</span>
-                  <Sparkles size={14} className="text-amber-400" />
-                </h3>
-                <p className="text-[11px] text-neutral-400 leading-snug">
-                  {t.supportDesc}
-                </p>
-              </div>
-            </div>
-
-            {/* Presets */}
-            <div className="grid grid-cols-5 gap-1.5 pt-1">
-              {DONATE_PRESETS.map((amount) => (
-                <button
-                  key={amount}
-                  type="button"
-                  onClick={() => {
-                    setSelectedPreset(amount);
-                    setCustomAmount('');
-                  }}
-                  className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                    selectedPreset === amount && !customAmount
-                      ? 'bg-amber-500 text-black border-amber-500 shadow-md shadow-amber-950/40'
-                      : 'bg-white/5 text-neutral-300 border-white/5 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  {amount} ₽
-                </button>
-              ))}
-            </div>
-
-            {/* Custom Amount Field */}
-            <div className="flex items-center space-x-2">
-              <div className="relative flex-1">
-                <input
-                  type="number"
-                  min="10"
-                  step="10"
-                  value={customAmount}
-                  onChange={(e) => {
-                    setCustomAmount(e.target.value);
-                  }}
-                  placeholder={t.enterAmountRub}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
-                />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-400 pointer-events-none">
-                  ₽
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleDonate}
-                className="py-2.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs flex items-center space-x-1.5 shadow-lg shadow-amber-900/30 transition-all active:scale-95 cursor-pointer shrink-0"
-              >
-                <span>{t.donateViaYooMoney}</span>
-                <ExternalLink size={13} />
-              </button>
-            </div>
-            <p className="text-[10px] text-neutral-500">
-              {t.minAmountNotice}
-            </p>
-          </div>
-
-          {/* 2. STORAGE MANAGEMENT (Downloaded tracks + Sorting) */}
-          <div className="space-y-3 p-4 rounded-3xl bg-[#1C1A1A] border border-white/5">
-            <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
-                  <HardDrive size={16} />
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+                >
+                  <SlidersHorizontal size={18} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">{t.storageManagement}</h3>
-                  <p className="text-[11px] text-neutral-400">
-                    {t.totalStorageUsed(downloadedTracks.length, totalStorageFormatted)}
-                  </p>
+                  <h2 className="text-sm font-bold text-white tracking-tight">{t.settings}</h2>
+                  <p className="text-[10px] text-neutral-400">LieMusic v1.0.2</p>
                 </div>
               </div>
-
-              {downloadedTracks.length > 0 && (
-                <button
-                  type="button"
-                  onClick={onClearAllDownloads}
-                  className="text-[11px] text-rose-400 hover:text-rose-300 font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
-                >
-                  {t.clear}
-                </button>
-              )}
+              <button
+                onClick={onClose}
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            {/* Sorting Selector */}
-            {downloadedTracks.length > 0 && (
-              <div className="space-y-1.5 pt-1 border-t border-white/5">
-                <div className="flex items-center justify-between text-xs text-neutral-400">
-                  <span className="flex items-center space-x-1 text-[11px] font-medium">
-                    <ArrowUpDown size={12} />
-                    <span>{t.sortBy}</span>
-                  </span>
+            {/* Scrollable Content */}
+            <div
+              onScroll={(e) => setIsAtTop(e.currentTarget.scrollTop <= 2)}
+              className="flex-1 overflow-y-auto p-4 space-y-4"
+            >
+              {/* 1. SUPPORT THE PROJECT (YooMoney) */}
+              <div className="p-4 rounded-3xl bg-gradient-to-br from-amber-500/15 via-[#1D1B1B] to-[#171515] border border-amber-500/25 space-y-3.5 shadow-lg relative overflow-hidden">
+                <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
+
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                    <HeartHandshake size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-white flex items-center space-x-1.5">
+                      <span>{t.supportProject}</span>
+                      <Sparkles size={14} className="text-amber-400" />
+                    </h3>
+                    <p className="text-[11px] text-neutral-400 leading-snug">
+                      {t.supportDesc}
+                    </p>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
+
+                {/* Presets */}
+                <div className="grid grid-cols-5 gap-1.5 pt-1">
+                  {DONATE_PRESETS.map((amount) => (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPreset(amount);
+                        setCustomAmount('');
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                        selectedPreset === amount && !customAmount
+                          ? 'bg-amber-500 text-black border-amber-500 shadow-md shadow-amber-950/40'
+                          : 'bg-white/5 text-neutral-300 border-white/5 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      {amount} ₽
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom Amount Field */}
+                <div className="flex items-center space-x-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      min="10"
+                      step="10"
+                      value={customAmount}
+                      onChange={(e) => {
+                        setCustomAmount(e.target.value);
+                      }}
+                      placeholder={t.enterAmountRub}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-400 pointer-events-none">
+                      ₽
+                    </span>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setSortType('size_desc')}
-                    className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-all cursor-pointer ${
-                      sortType === 'size_desc'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                        : 'bg-white/5 border-white/5 text-neutral-400 hover:text-white'
-                    }`}
+                    onClick={handleDonate}
+                    className="py-2.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs flex items-center space-x-1.5 shadow-lg shadow-amber-900/30 transition-all active:scale-95 cursor-pointer shrink-0"
                   >
-                    🔽 {t.sortBySizeDesc}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortType('size_asc')}
-                    className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-all cursor-pointer ${
-                      sortType === 'size_asc'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                        : 'bg-white/5 border-white/5 text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    🔼 {t.sortBySizeAsc}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortType('title_asc')}
-                    className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-all cursor-pointer ${
-                      sortType === 'title_asc'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                        : 'bg-white/5 border-white/5 text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    🔤 {t.sortByName}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortType('date_desc')}
-                    className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-all cursor-pointer ${
-                      sortType === 'date_desc'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                        : 'bg-white/5 border-white/5 text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    🕒 {t.sortByDate}
+                    <span>{t.donateViaYooMoney}</span>
+                    <ExternalLink size={13} />
                   </button>
                 </div>
+                <p className="text-[10px] text-neutral-500">
+                  {t.minAmountNotice}
+                </p>
               </div>
-            )}
 
-            {/* List of files with sizes */}
-            <div className="space-y-1.5 pt-2 max-h-56 overflow-y-auto pr-1">
-              {sortedDownloadedTracks.length > 0 ? (
-                sortedDownloadedTracks.map((tr) => (
-                  <div
-                    key={tr.id}
-                    className="flex items-center justify-between p-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5 group"
-                  >
-                    <div className="flex items-center space-x-2.5 min-w-0 flex-1 pr-2">
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-neutral-800 shrink-0">
-                        {tr.thumbnail ? (
-                          <img src={tr.thumbnail} alt={tr.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-neutral-600 text-[10px]">
-                            🎵
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-white truncate">{tr.title}</p>
-                        <p className="text-[10px] text-neutral-400 truncate">{tr.artist}</p>
-                      </div>
+              {/* 2. STORAGE MANAGEMENT (Downloaded tracks + Sorting) */}
+              <div className="space-y-3 p-4 rounded-3xl bg-[#1C1A1A] border border-white/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                      <HardDrive size={16} />
                     </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">{t.storageManagement}</h3>
+                      <p className="text-[11px] text-neutral-400">
+                        {t.totalStorageUsed(downloadedTracks.length, totalStorageFormatted)}
+                      </p>
+                    </div>
+                  </div>
 
-                    <div className="flex items-center space-x-2 shrink-0">
-                      {tr.fileSize && (
-                        <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg">
-                          {tr.fileSize}
-                        </span>
-                      )}
+                  {downloadedTracks.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={onClearAllDownloads}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
+                    >
+                      {t.clear}
+                    </button>
+                  )}
+                </div>
+
+                {/* Sorting Selector */}
+                {downloadedTracks.length > 0 && (
+                  <div className="space-y-1.5 pt-1 border-t border-white/5">
+                    <div className="flex items-center justify-between text-xs text-neutral-400">
+                      <span className="flex items-center space-x-1 text-[11px] font-medium">
+                        <ArrowUpDown size={12} />
+                        <span>{t.sortBy}</span>
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button
                         type="button"
-                        onClick={() => onDeleteTrack(tr.id, tr.title)}
-                        className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                        title={t.deleteFromDevice}
+                        onClick={() => setSortType('size_desc')}
+                        className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-all cursor-pointer ${
+                          sortType === 'size_desc'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                            : 'bg-white/5 border-white/5 text-neutral-400 hover:text-white'
+                        }`}
                       >
-                        <Trash2 size={14} />
+                        🔽 {t.sortBySizeDesc}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSortType('size_asc')}
+                        className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-all cursor-pointer ${
+                          sortType === 'size_asc'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                            : 'bg-white/5 border-white/5 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        🔼 {t.sortBySizeAsc}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSortType('title_asc')}
+                        className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-all cursor-pointer ${
+                          sortType === 'title_asc'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                            : 'bg-white/5 border-white/5 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        🔤 {t.sortByName}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSortType('date_desc')}
+                        className={`text-left px-2.5 py-1.5 rounded-xl text-[11px] font-medium border transition-all cursor-pointer ${
+                          sortType === 'date_desc'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                            : 'bg-white/5 border-white/5 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        🕒 {t.sortByDate}
                       </button>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="py-6 text-center text-neutral-500 text-xs">
-                  {t.noDownloadedTracks}
+                )}
+
+                {/* List of files with sizes */}
+                <div className="space-y-1.5 pt-2 max-h-56 overflow-y-auto pr-1">
+                  {sortedDownloadedTracks.length > 0 ? (
+                    sortedDownloadedTracks.map((tr) => (
+                      <div
+                        key={tr.id}
+                        className="flex items-center justify-between p-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5 group"
+                      >
+                        <div className="flex items-center space-x-2.5 min-w-0 flex-1 pr-2">
+                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-neutral-800 shrink-0">
+                            {tr.thumbnail ? (
+                              <img src={tr.thumbnail} alt={tr.title} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-neutral-600 text-[10px]">
+                                🎵
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-white truncate">{tr.title}</p>
+                            <p className="text-[10px] text-neutral-400 truncate">{tr.artist}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2 shrink-0">
+                          {tr.fileSize && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg">
+                              {tr.fileSize}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onDeleteTrack(tr.id, tr.title)}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            title={t.deleteFromDevice}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-neutral-500 text-xs">
+                      {t.noDownloadedTracks}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* 3. PREFERENCES */}
-          <div className="space-y-3 p-4 rounded-3xl bg-[#1C1A1A] border border-white/5">
-            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center space-x-1.5">
-              <Sliders size={14} />
-              <span>{t.preferences}</span>
-            </h3>
-
-            {/* Language Toggle Card */}
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5">
-              <div>
-                <p className="text-xs font-semibold text-white">{t.language}</p>
-                <p className="text-[10px] text-neutral-400">
-                  {language === 'ru' ? 'Русский (RU)' : 'English (EN)'}
-                </p>
               </div>
-              <div className="flex items-center space-x-1 bg-white/5 p-1 rounded-xl border border-white/10">
+
+              {/* 3. PREFERENCES */}
+              <div className="space-y-3 p-4 rounded-3xl bg-[#1C1A1A] border border-white/5">
+                <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center space-x-1.5">
+                  <Sliders size={14} />
+                  <span>{t.preferences}</span>
+                </h3>
+
+                {/* Language Toggle Card */}
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5">
+                  <div>
+                    <p className="text-xs font-semibold text-white">{t.language}</p>
+                    <p className="text-[10px] text-neutral-400">
+                      {language === 'ru' ? 'Русский (RU)' : 'English (EN)'}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-1 bg-white/5 p-1 rounded-xl border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => onLanguageChange('ru')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        language === 'ru'
+                          ? 'bg-orange-500 text-black shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      RU
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onLanguageChange('en')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        language === 'en'
+                          ? 'bg-orange-500 text-black shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      EN
+                    </button>
+                  </div>
+                </div>
+
+                {/* Cellular Download Toggle */}
+                <div
+                  onClick={handleCellularToggle}
+                  className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors"
+                >
+                  <div className="pr-3">
+                    <p className="text-xs font-semibold text-white flex items-center space-x-1.5">
+                      <Wifi size={13} className="text-amber-400" />
+                      <span>{t.cellularDownloadTitle}</span>
+                    </p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">
+                      {t.cellularDownloadSubtitle}
+                    </p>
+                  </div>
+                  <div
+                    className={`w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
+                      allowCellular ? 'bg-amber-500' : 'bg-white/20'
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full bg-white shadow-md transition-transform ${
+                        allowCellular ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Confirm Delete Toggle */}
+                <div
+                  onClick={handleConfirmDeleteToggle}
+                  className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors"
+                >
+                  <div className="pr-3">
+                    <p className="text-xs font-semibold text-white flex items-center space-x-1.5">
+                      <AlertCircle size={13} className="text-rose-400" />
+                      <span>{t.confirmDeleteTitle}</span>
+                    </p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">
+                      {t.confirmDeleteSubtitle}
+                    </p>
+                  </div>
+                  <div
+                    className={`w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
+                      !dontAskDelete ? 'bg-rose-500' : 'bg-white/20'
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full bg-white shadow-md transition-transform ${
+                        !dontAskDelete ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Equalizer Button */}
                 <button
                   type="button"
-                  onClick={() => onLanguageChange('ru')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    language === 'ru'
-                      ? 'bg-orange-500 text-black shadow-sm'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
+                  onClick={() => {
+                    onClose();
+                    onOpenEqualizer();
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs font-medium text-white transition-colors cursor-pointer"
                 >
-                  RU
+                  <span className="flex items-center space-x-2">
+                    <Sliders size={14} style={{ color: accentColor }} />
+                    <span>{t.openEqualizer}</span>
+                  </span>
+                  <span className="text-neutral-500 text-[10px]">10-Band</span>
                 </button>
+
+                {/* Clear History Button */}
                 <button
                   type="button"
-                  onClick={() => onLanguageChange('en')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    language === 'en'
-                      ? 'bg-orange-500 text-black shadow-sm'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
+                  onClick={handleClearHistoryClick}
+                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs font-medium text-neutral-300 hover:text-white transition-colors cursor-pointer"
                 >
-                  EN
+                  <span className="flex items-center space-x-2">
+                    <RotateCcw size={14} className="text-neutral-400" />
+                    <span>{t.clearHistory}</span>
+                  </span>
+                  {historyClearedNotice && (
+                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center space-x-1">
+                      <Check size={12} />
+                      <span>{t.historyCleared}</span>
+                    </span>
+                  )}
                 </button>
               </div>
-            </div>
 
-            {/* Cellular Download Toggle */}
-            <div
-              onClick={handleCellularToggle}
-              className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors"
-            >
-              <div className="pr-3">
-                <p className="text-xs font-semibold text-white flex items-center space-x-1.5">
-                  <Wifi size={13} className="text-amber-400" />
-                  <span>{t.cellularDownloadTitle}</span>
+              {/* 4. ABOUT SECTION */}
+              <div className="p-4 rounded-3xl bg-[#1C1A1A] border border-white/5 space-y-3 text-left">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
+                    <FoxLogo className="w-7 h-7 text-orange-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white tracking-tight">LieMusic</h4>
+                    <p className="text-[11px] text-neutral-400">v1.0.0 (Release) · Tauri 2.0</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-neutral-300 leading-relaxed">
+                  {t.aboutDescription}
                 </p>
-                <p className="text-[10px] text-neutral-400 mt-0.5">
-                  {t.cellularDownloadSubtitle}
-                </p>
-              </div>
-              <div
-                className={`w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
-                  allowCellular ? 'bg-amber-500' : 'bg-white/20'
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full bg-white shadow-md transition-transform ${
-                    allowCellular ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </div>
-            </div>
 
-            {/* Confirm Delete Toggle */}
-            <div
-              onClick={handleConfirmDeleteToggle}
-              className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors"
-            >
-              <div className="pr-3">
-                <p className="text-xs font-semibold text-white flex items-center space-x-1.5">
-                  <AlertCircle size={13} className="text-rose-400" />
-                  <span>{t.confirmDeleteTitle}</span>
-                </p>
-                <p className="text-[10px] text-neutral-400 mt-0.5">
-                  {t.confirmDeleteSubtitle}
-                </p>
-              </div>
-              <div
-                className={`w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 shrink-0 ${
-                  !dontAskDelete ? 'bg-rose-500' : 'bg-white/20'
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full bg-white shadow-md transition-transform ${
-                    !dontAskDelete ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
+                  <span className="text-neutral-400">
+                    {t.developer}: <span className="text-white font-medium">lie2srvv</span>
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => openExternalUrl('https://t.me/lie2srvv')}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-400 text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    <Send size={12} />
+                    <span>Telegram</span>
+                  </button>
+                </div>
               </div>
             </div>
-
-            {/* Quick Equalizer Button */}
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenEqualizer();
-              }}
-              className="w-full flex items-center justify-between p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs font-medium text-white transition-colors cursor-pointer"
-            >
-              <span className="flex items-center space-x-2">
-                <Sliders size={14} style={{ color: accentColor }} />
-                <span>{t.openEqualizer}</span>
-              </span>
-              <span className="text-neutral-500 text-[10px]">10-Band</span>
-            </button>
-
-            {/* Clear History Button */}
-            <button
-              type="button"
-              onClick={handleClearHistoryClick}
-              className="w-full flex items-center justify-between p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs font-medium text-neutral-300 hover:text-white transition-colors cursor-pointer"
-            >
-              <span className="flex items-center space-x-2">
-                <RotateCcw size={14} className="text-neutral-400" />
-                <span>{t.clearHistory}</span>
-              </span>
-              {historyClearedNotice && (
-                <span className="text-[10px] text-emerald-400 font-semibold flex items-center space-x-1">
-                  <Check size={12} />
-                  <span>{t.historyCleared}</span>
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* 4. ABOUT SECTION */}
-          <div className="p-4 rounded-3xl bg-[#1C1A1A] border border-white/5 space-y-3 text-left">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
-                <FoxLogo className="w-7 h-7 text-orange-500" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-white tracking-tight">LieMusic</h4>
-                <p className="text-[11px] text-neutral-400">v1.0.0 (Release) · Tauri 2.0</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-neutral-300 leading-relaxed">
-              {t.aboutDescription}
-            </p>
-
-            <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
-              <span className="text-neutral-400">
-                {t.developer}: <span className="text-white font-medium">lie2srvv</span>
-              </span>
-
-              <button
-                type="button"
-                onClick={() => openExternalUrl('https://t.me/lie2srvv')}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-400 text-xs font-medium transition-colors cursor-pointer"
-              >
-                <Send size={12} />
-                <span>Telegram</span>
-              </button>
-            </div>
-          </div>
-        </div>
           </motion.div>
         </motion.div>
       )}

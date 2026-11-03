@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/icon.png" alt="LieMusic Logo" width="100" style="border-radius: 24px; margin-bottom: 12px;" />
+<img src="assets/icon.png" alt="LieMusic Logo" width="100" style="margin-bottom: 12px;" />
 
 # LieMusic
 

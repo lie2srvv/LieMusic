@@ -12,7 +12,7 @@ interface TrackListItemProps {
   accentColor: string;
   onPlay: () => void;
   onToggleFavorite: () => void;
-  onDownload: () => void;
+  onDownload?: () => void;
   onDeleteDownload?: () => void;
 }
 
@@ -41,76 +41,66 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
   return (
     <div
       onClick={onPlay}
-      className={`group flex items-center justify-between p-2.5 rounded-2xl transition-all cursor-pointer ${
+      className={`group relative flex items-center justify-between p-2.5 rounded-2xl transition-all cursor-pointer ${
         isCurrent
           ? 'bg-white/10 shadow-lg'
-          : 'hover:bg-white/5 active:bg-white/10'
+          : 'hover:bg-white/5 active:scale-[0.99]'
       }`}
     >
-      {/* Left: Thumbnail & Info */}
-      <div className="flex items-center space-x-3 overflow-hidden flex-1 mr-2">
-        <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-neutral-800">
+      <div className="flex items-center space-x-3 min-w-0 flex-1 pr-3">
+        {/* Cover Art with Playing State */}
+        <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-neutral-800 shrink-0 shadow-md">
           {track.thumbnail ? (
             <img
               src={track.thumbnail}
               alt={track.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-cover"
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-neutral-600 bg-neutral-900">
-              <span className="text-lg">🎵</span>
+            <div className="w-full h-full flex items-center justify-center text-neutral-600">
+              <Play size={16} fill="currentColor" />
             </div>
           )}
 
-          {/* Current track playing indicator overlay */}
           {isCurrent && (
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex items-center justify-center">
               {isPlaying ? (
-                <div className="flex items-end space-x-0.5 h-3">
-                  <span className="w-0.5 h-full bg-white animate-bounce" />
-                  <span className="w-0.5 h-2/3 bg-white animate-bounce delay-75" />
-                  <span className="w-0.5 h-full bg-white animate-bounce delay-150" />
+                <div className="flex items-end space-x-0.5 h-3.5">
+                  <span className="w-0.5 bg-white animate-pulse h-full rounded-full" />
+                  <span className="w-0.5 bg-white animate-pulse h-2 rounded-full delay-75" />
+                  <span className="w-0.5 bg-white animate-pulse h-3.5 rounded-full delay-150" />
                 </div>
               ) : (
-                <Play size={16} fill="white" className="text-white" />
+                <Play size={16} fill="white" className="text-white translate-x-0.5" />
               )}
             </div>
           )}
         </div>
 
-        <div className="overflow-hidden flex-1">
-          <h4
+        {/* Title, Artist, Tags */}
+        <div className="min-w-0 flex-1">
+          <p
             className={`text-sm font-semibold truncate tracking-tight ${
-              isCurrent ? 'font-bold' : 'text-neutral-200'
+              isCurrent ? 'text-white' : 'text-neutral-200'
             }`}
             style={{ color: isCurrent ? accentColor : undefined }}
           >
             {track.title}
-          </h4>
+          </p>
           <div className="flex items-center space-x-1.5 mt-0.5">
             <span
-              className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded"
-              style={{
-                backgroundColor:
-                  track.source === 'youtube'
-                    ? '#EF444420'
-                    : track.source === 'soundcloud'
-                    ? '#F9731620'
-                    : '#06B6D420',
-                color:
-                  track.source === 'youtube'
-                    ? '#F87171'
-                    : track.source === 'soundcloud'
-                    ? '#FB923C'
-                    : '#22D3EE',
-              }}
+              className={`text-[9px] uppercase font-bold px-1 rounded ${
+                track.source === 'youtube'
+                  ? 'bg-red-500/20 text-red-400'
+                  : 'bg-orange-500/20 text-orange-400'
+              }`}
             >
-              {track.source === 'youtube' ? 'YT' : track.source === 'soundcloud' ? 'SC' : 'Local'}
+              {track.source === 'youtube' ? 'YT' : 'SC'}
             </span>
             <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
-            {trackFileSize && (
-              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-400/10 px-1 rounded">
+            {isTrackDownloaded && trackFileSize && (
+              <span className="text-[10px] font-mono text-emerald-400/80 bg-emerald-500/10 px-1 rounded">
                 {trackFileSize}
               </span>
             )}
@@ -138,7 +128,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           >
             <Trash2 size={16} />
           </button>
-        ) : (
+        ) : onDownload ? (
           <button
             onClick={onDownload}
             className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
@@ -148,7 +138,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           >
             <Download size={16} />
           </button>
-        )}
+        ) : null}
 
         <span className="text-xs font-mono text-neutral-500 w-10 text-right">
           {formatTime(track.duration)}

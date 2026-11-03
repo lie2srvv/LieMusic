@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Search, Library, DownloadCloud, User } from 'lucide-react';
+import { Home, Search, Library, DownloadCloud } from 'lucide-react';
 
-export type TabType = 'home' | 'search' | 'library' | 'offline' | 'profile';
+export type TabType = 'home' | 'search' | 'library' | 'offline';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -19,7 +19,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'search' as TabType, label: 'Поиск', icon: Search },
     { id: 'library' as TabType, label: 'Медиатека', icon: Library },
     { id: 'offline' as TabType, label: 'Офлайн', icon: DownloadCloud },
-    { id: 'profile' as TabType, label: 'Профиль', icon: User },
   ];
 
   return (
@@ -33,7 +32,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <button
               key={tab.id}
               onClick={() => onChangeTab(tab.id)}
-              className="flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-200 active:scale-95 cursor-pointer"
+              className="flex flex-col items-center justify-center py-1 px-4 rounded-2xl transition-all duration-200 active:scale-95 cursor-pointer"
             >
               <div
                 className={`p-1.5 rounded-full transition-all duration-300 ${

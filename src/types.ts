@@ -15,38 +15,16 @@ export interface Track {
   localPath?: string;
 }
 
-export interface UserPrivacySettings {
-  showListeningHistory: boolean;
-  showFavorites: boolean;
-  stealthMode: boolean; // Do not save any history
-}
-
-export interface UserProfile {
-  id: string;
-  nickname: string;
-  avatar: string;
-  plan: 'free' | 'lifetime';
-  licenseKey?: string;
-  activatedAt?: string;
-  privacy: UserPrivacySettings;
-  createdAt: string;
-}
-
-export interface LyricsLine {
-  timeMs: number;
-  text: string;
-}
-
 export interface EqualizerBand {
   frequency: number;
-  gain: number; // -12dB to +12dB
+  gain: number;
 }
 
 export interface EqualizerPreset {
   id: string;
   name: string;
-  bands: number[]; // 10 values for 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k, 16k
-  bassBoost?: number; // 0 to 100
+  bands: number[];
+  bassBoost?: number;
 }
 
 export interface Playlist {

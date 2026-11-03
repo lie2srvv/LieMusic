@@ -1,11 +1,34 @@
-node_modules
-dist
-dist-ssr
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+dist-ssr/
+src-tauri/target/
+
+# Android build outputs & caches
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/.kotlin/
+src-tauri/gen/android/build/
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/buildSrc/.gradle/
+src-tauri/gen/android/buildSrc/.kotlin/
+src-tauri/gen/android/buildSrc/build/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/.idea/
+*.keystore
+*.jks
+
+# Temporary and local files
 *.local
-src-tauri/target
-src-tauri/gen/android/.gradle
-src-tauri/gen/android/build
-src-tauri/gen/android/app/build
-src-tauri/gen/android/app/src/main/jniLibs
+*.log
+.env
+.env.*
+!.env.example
 *.apk
+*.aab
 liemusic_*.png
+.DS_Store
+Thumbs.db

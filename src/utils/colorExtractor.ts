@@ -16,12 +16,18 @@ const defaultPalette: ExtractedPalette = {
   contrastText: '#151313',
 };
 
+const MAX_CACHE_SIZE = 100;
 const cache = new Map<string, ExtractedPalette>();
 
 export function extractPaletteFromImage(imageUrl: string): Promise<ExtractedPalette> {
   if (!imageUrl) return Promise.resolve(defaultPalette);
+
   if (cache.has(imageUrl)) {
-    return Promise.resolve(cache.get(imageUrl)!);
+    const cached = cache.get(imageUrl)!;
+    // Refresh position for LRU
+    cache.delete(imageUrl);
+    cache.set(imageUrl, cached);
+    return Promise.resolve(cached);
   }
 
   return new Promise((resolve) => {
@@ -44,9 +50,11 @@ export function extractPaletteFromImage(imageUrl: string): Promise<ExtractedPale
         ctx.drawImage(img, 0, 0, size, size);
 
         const data = ctx.getImageData(0, 0, size, size).data;
-        let rSum = 0, gSum = 0, bSum = 0, count = 0;
+        let rSum = 0;
+        let gSum = 0;
+        let bSum = 0;
+        let count = 0;
 
-        // Skip overly dark or overly washed out pixels to find vibrant music tone
         for (let i = 0; i < data.length; i += 16) {
           const r = data[i];
           const g = data[i + 1];
@@ -80,6 +88,10 @@ export function extractPaletteFromImage(imageUrl: string): Promise<ExtractedPale
           contrastText: (avgR * 299 + avgG * 587 + avgB * 114) / 1000 > 160 ? '#151313' : '#FFFFFF',
         };
 
+        if (cache.size >= MAX_CACHE_SIZE) {
+          const oldestKey = cache.keys().next().value;
+          if (oldestKey) cache.delete(oldestKey);
+        }
         cache.set(imageUrl, palette);
         resolve(palette);
       } catch {

@@ -57,7 +57,16 @@ export const App: React.FC = () => {
   const [volume, setVolume] = useState<number>(0.85);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
   const [isRepeat, setIsRepeat] = useState<boolean>(false);
-  const [visualizerData, setVisualizerData] = useState<Uint8Array>(new Uint8Array(32));
+  const searchRequestId = useRef<number>(0);
+  const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceTimer.current) {
+        clearTimeout(searchDebounceTimer.current);
+      }
+    };
+  }, []);
 
   const [palette, setPalette] = useState<ExtractedPalette>({
     dominant: 'rgb(245, 220, 223)',
@@ -239,17 +248,6 @@ export const App: React.FC = () => {
     };
   }, [handleNextTrack]);
 
-  useEffect(() => {
-    if (!isPlaying) return;
-    let rafId: number;
-    const loop = () => {
-      setVisualizerData(audioEngine.getVisualizerData());
-      rafId = requestAnimationFrame(loop);
-    };
-    rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
-  }, [isPlaying]);
-
   const handleTogglePlay = () => {
     if (!currentTrack && queue.length > 0) {
       handlePlayTrack(queue[0]);
@@ -404,8 +402,9 @@ export const App: React.FC = () => {
         });
 
         let duration = 180;
+        const objectUrl = URL.createObjectURL(file);
         try {
-          const tempAudio = new Audio(URL.createObjectURL(file));
+          const tempAudio = new Audio(objectUrl);
           await new Promise<void>((resolve) => {
             tempAudio.addEventListener('loadedmetadata', () => {
               if (!isNaN(tempAudio.duration) && tempAudio.duration > 0) {
@@ -415,8 +414,10 @@ export const App: React.FC = () => {
             });
             setTimeout(resolve, 600);
           });
-        } catch {
-          // Fallback duration
+        } catch (err) {
+          console.warn('[LieMusic] Failed to read audio duration, using default:', err);
+        } finally {
+          URL.revokeObjectURL(objectUrl);
         }
 
         const localTrack: Track = {
@@ -440,41 +441,75 @@ export const App: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleSearch = async (query: string, sourceOverride?: AudioSource | 'all') => {
-    setSearchQuery(query);
-    const activeSource = sourceOverride || searchSource;
+  const executeSearch = useCallback(async (query: string, source: AudioSource | 'all') => {
     const clean = query.trim();
     if (!clean) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
 
+    const currentReqId = ++searchRequestId.current;
     setIsSearching(true);
+
     try {
       let combined: Track[] = [];
 
-      if (activeSource === 'all') {
+      if (source === 'all') {
         const [ytResults, scResults] = await Promise.all([
           searchYouTubeTracks(clean),
           searchSoundCloudTracks(clean),
         ]);
+        if (searchRequestId.current !== currentReqId) return;
         const maxLen = Math.max(ytResults.length, scResults.length);
         for (let i = 0; i < maxLen; i++) {
           if (ytResults[i]) combined.push(ytResults[i]);
           if (scResults[i]) combined.push(scResults[i]);
         }
-      } else if (activeSource === 'youtube') {
+      } else if (source === 'youtube') {
         combined = await searchYouTubeTracks(clean);
       } else {
         combined = await searchSoundCloudTracks(clean);
       }
 
-      setSearchResults(combined);
+      if (searchRequestId.current === currentReqId) {
+        setSearchResults(combined);
+      }
     } catch (err) {
-      console.error('[LieMusic] Search error:', err);
-      setSearchResults([]);
+      if (searchRequestId.current === currentReqId) {
+        console.error('[LieMusic] Search error:', err);
+        setSearchResults([]);
+      }
     } finally {
+      if (searchRequestId.current === currentReqId) {
+        setIsSearching(false);
+      }
+    }
+  }, []);
+
+  const handleSearchInput = (value: string) => {
+    setSearchQuery(value);
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+    if (!value.trim()) {
+      searchRequestId.current++;
+      setSearchResults([]);
       setIsSearching(false);
+      return;
+    }
+    searchDebounceTimer.current = setTimeout(() => {
+      executeSearch(value, searchSource);
+    }, 280);
+  };
+
+  const handleSourceChange = (newSource: AudioSource | 'all') => {
+    setSearchSource(newSource);
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+    if (searchQuery.trim()) {
+      executeSearch(searchQuery, newSource);
     }
   };
 
@@ -690,7 +725,7 @@ export const App: React.FC = () => {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
+                onChange={(e) => handleSearchInput(e.target.value)}
                 placeholder={t.searchPlaceholder}
                 className="w-full bg-[#1D1B1B] border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all shadow-inner"
                 autoFocus
@@ -706,10 +741,7 @@ export const App: React.FC = () => {
               ].map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => {
-                    setSearchSource(s.id as any);
-                    if (searchQuery) handleSearch(searchQuery, s.id as any);
-                  }}
+                  onClick={() => handleSourceChange(s.id as any)}
                   className={`text-xs px-3 py-1.5 rounded-xl border transition-all cursor-pointer font-medium ${
                     searchSource === s.id
                       ? 'bg-white text-black border-white shadow'
@@ -1136,7 +1168,6 @@ export const App: React.FC = () => {
         isRepeat={isRepeat}
         isDownloading={currentTrack ? downloadingIds.has(currentTrack.id) : false}
         volume={volume}
-        visualizerData={visualizerData}
         accentColor={palette.accent}
         glowColor={palette.glow}
         onTogglePlay={handleTogglePlay}

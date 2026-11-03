@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::fs;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
@@ -17,14 +17,6 @@ pub struct SearchTrackResult {
     pub thumbnail: String,
     pub source: String,
     pub stream_url: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LicenseResult {
-    pub valid: bool,
-    pub message: String,
-    pub plan: String,
-    pub activated_at: Option<String>,
 }
 
 static OFFLINE_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
@@ -106,35 +98,44 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                         return;
                     }
 
-                    let file_bytes = match fs::read(&file_path) {
-                        Ok(b) => b,
+                    let mut file = match std::fs::File::open(&file_path) {
+                        Ok(f) => f,
                         Err(_) => return,
                     };
 
-                    let total_len = file_bytes.len();
-                    let mime_type = if file_bytes.starts_with(b"ID3")
-                        || (file_bytes.len() > 1
-                            && file_bytes[0] == 0xFF
-                            && (file_bytes[1] & 0xE0) == 0xE0)
+                    let total_len = match file.metadata() {
+                        Ok(m) => m.len() as usize,
+                        Err(_) => return,
+                    };
+
+                    // Detect MIME type by inspecting the header bytes without loading whole file
+                    let mut header_buf = [0u8; 32];
+                    let header_read_len = file.read(&mut header_buf).unwrap_or(0);
+                    let header_slice = &header_buf[..header_read_len];
+
+                    let mime_type = if header_slice.starts_with(b"ID3")
+                        || (header_slice.len() > 1
+                            && header_slice[0] == 0xFF
+                            && (header_slice[1] & 0xE0) == 0xE0)
                     {
                         "audio/mpeg"
-                    } else if file_bytes.starts_with(b"OggS") {
+                    } else if header_slice.starts_with(b"OggS") {
                         "audio/ogg"
-                    } else if file_bytes.starts_with(b"RIFF") {
+                    } else if header_slice.starts_with(b"RIFF") {
                         "audio/wav"
-                    } else if file_bytes.starts_with(b"fLaC") {
+                    } else if header_slice.starts_with(b"fLaC") {
                         "audio/flac"
-                    } else if file_bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+                    } else if header_slice.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
                         "audio/webm"
-                    } else if file_bytes.len() > 12
-                        && (&file_bytes[4..8] == b"ftyp" || &file_bytes[4..8] == b"moov")
+                    } else if header_slice.len() > 12
+                        && (&header_slice[4..8] == b"ftyp" || &header_slice[4..8] == b"moov")
                     {
                         "audio/mp4"
                     } else {
                         "audio/mpeg"
                     };
 
-                    // Range support
+                    // Check for Range request header
                     let range_header = req_str
                         .lines()
                         .find(|l| l.to_lowercase().starts_with("range:"))
@@ -170,14 +171,21 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                                     mime_type, chunk_len, start, end, total_len
                                 );
                                 let _ = stream.write_all(header.as_bytes()).await;
+
                                 if method == "GET" {
-                                    let _ = stream.write_all(&file_bytes[start..=end]).await;
+                                    if file.seek(SeekFrom::Start(start as u64)).is_ok() {
+                                        let mut chunk = vec![0u8; chunk_len];
+                                        if file.read_exact(&mut chunk).is_ok() {
+                                            let _ = stream.write_all(&chunk).await;
+                                        }
+                                    }
                                 }
                                 return;
                             }
                         }
                     }
 
+                    // Standard 200 OK response
                     let header = format!(
                         "HTTP/1.1 200 OK\r\n\
                          Content-Type: {}\r\n\
@@ -191,132 +199,19 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                         mime_type, total_len
                     );
                     let _ = stream.write_all(header.as_bytes()).await;
+
                     if method == "GET" {
-                        let _ = stream.write_all(&file_bytes).await;
+                        if file.seek(SeekFrom::Start(0)).is_ok() {
+                            let mut file_bytes = Vec::with_capacity(total_len);
+                            if file.read_to_end(&mut file_bytes).is_ok() {
+                                let _ = stream.write_all(&file_bytes).await;
+                            }
+                        }
                     }
                 });
             }
         }
     });
-}
-
-#[tauri::command]
-fn get_device_id(app: tauri::AppHandle) -> Result<String, String> {
-    let dir = get_app_dir(&app)?;
-    if !dir.exists() {
-        let _ = fs::create_dir_all(&dir);
-    }
-    let id_file = dir.join("device_id.txt");
-    if id_file.exists() {
-        if let Ok(id) = fs::read_to_string(&id_file) {
-            let trimmed = id.trim().to_string();
-            if !trimmed.is_empty() {
-                return Ok(trimmed);
-            }
-        }
-    }
-
-    let raw = format!(
-        "{}-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos(),
-        rand_seed()
-    );
-    let mut hasher = Sha256::new();
-    hasher.update(raw.as_bytes());
-    let hash = hex::encode(hasher.finalize());
-    let short_id = format!("LM-{}", &hash[0..12].to_uppercase());
-    let _ = fs::write(&id_file, &short_id);
-    Ok(short_id)
-}
-
-fn rand_seed() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(42)
-}
-
-#[tauri::command]
-fn save_profile_file(app: tauri::AppHandle, profile_json: String) -> Result<(), String> {
-    let dir = get_app_dir(&app)?;
-    if !dir.exists() {
-        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    }
-    let file_path = dir.join("profile.json");
-    fs::write(file_path, profile_json).map_err(|e| format!("Failed to save profile: {}", e))?;
-    Ok(())
-}
-
-#[tauri::command]
-fn load_profile_file(app: tauri::AppHandle) -> Result<String, String> {
-    let dir = get_app_dir(&app)?;
-    let file_path = dir.join("profile.json");
-    if !file_path.exists() {
-        let dev_id = get_device_id(app)?;
-        let default_profile = serde_json::json!({
-            "deviceId": dev_id,
-            "nickname": "LieListener",
-            "avatar": "🦊",
-            "plan": "free",
-            "privacy": {
-                "stealthMode": false,
-                "showListeningHistory": true,
-                "shareProfileStats": false
-            },
-            "createdDate": "2026-11-03",
-            "version": 1
-        });
-        return Ok(default_profile.to_string());
-    }
-    fs::read_to_string(file_path).map_err(|e| format!("Failed to load profile: {}", e))
-}
-
-#[tauri::command]
-fn verify_license_key(key: String, device_id: String) -> Result<LicenseResult, String> {
-    let clean = key.trim().to_uppercase();
-
-    if clean == "LM-PRO-249-LIFETIME" {
-        return Ok(LicenseResult {
-            valid: true,
-            message: "Лицензия LieMusic Pro (Пожизненная) активирована офлайн!".into(),
-            plan: "lifetime".into(),
-            activated_at: Some("2026-11-03".into()),
-        });
-    }
-
-    if clean.starts_with("LM-") && clean.len() >= 16 {
-        let expected = format!("LM-{}-249-LIFETIME", &device_id.replace("LM-", ""));
-        if clean == expected {
-            return Ok(LicenseResult {
-                valid: true,
-                message: "Пожизненный ключ для вашего устройства активирован!".into(),
-                plan: "lifetime".into(),
-                activated_at: Some("2026-11-03".into()),
-            });
-        }
-    }
-
-    let mut hasher = Sha256::new();
-    hasher.update(clean.as_bytes());
-    let hash = hex::encode(hasher.finalize());
-    if hash.starts_with("00") || clean.contains("249") || clean.contains("LIE") {
-        return Ok(LicenseResult {
-            valid: true,
-            message: "Лицензия LiePay подтверждена!".into(),
-            plan: "lifetime".into(),
-            activated_at: Some("2026-11-03".into()),
-        });
-    }
-
-    Ok(LicenseResult {
-        valid: false,
-        message: "Неверный ключ активации. Проверьте номер заказа из LiePay".into(),
-        plan: "free".into(),
-        activated_at: None,
-    })
 }
 
 fn extract_youtube_videos(val: &serde_json::Value, out: &mut Vec<SearchTrackResult>) {
@@ -452,7 +347,7 @@ async fn search_music_native(
 
     let mut results: Vec<SearchTrackResult> = Vec::new();
 
-    // 1. YouTube InnerTube Direct Search
+    // 1. YouTube Search
     if source_filter == "all" || source_filter == "youtube" {
         let yt_body = serde_json::json!({
             "context": {
@@ -477,7 +372,7 @@ async fn search_music_native(
         }
     }
 
-    // 2. SoundCloud API v2 Search
+    // 2. SoundCloud API Search
     if source_filter == "all" || source_filter == "soundcloud" {
         let sc_url = format!(
             "https://api-v2.soundcloud.com/search/tracks?q={}&client_id=2yeWkbX88QhTzS3OtZp8cLGaJRrOAWwF&limit=20",
@@ -654,7 +549,6 @@ async fn download_track_file(
         let _ = fs::create_dir_all(&dl_dir);
     }
 
-    // First resolve the real streaming URL
     let resolved_url = resolve_stream_url_native(track_id.clone(), stream_url, source).await?;
 
     let client = reqwest::Client::builder()
@@ -679,7 +573,6 @@ async fn download_track_file(
     // Check if this is an HLS playlist (SoundCloud m3u8)
     if body_bytes.starts_with(b"#EXTM3U") {
         let text = String::from_utf8_lossy(&body_bytes);
-        // Extract init mp4 segment
         if let Some(init_start) = text.find("#EXT-X-MAP:URI=\"") {
             let rest = &text[init_start + 16..];
             if let Some(init_end) = rest.find('\"') {
@@ -692,7 +585,6 @@ async fn download_track_file(
             }
         }
 
-        // Extract and download each audio chunk (.m4s)
         for line in text.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("http") {
@@ -782,10 +674,6 @@ pub fn run() {
         })
         .plugin(tauri_plugin_log::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
-            get_device_id,
-            save_profile_file,
-            load_profile_file,
-            verify_license_key,
             search_music_native,
             resolve_stream_url_native,
             download_track_file,

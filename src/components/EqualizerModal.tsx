@@ -34,8 +34,6 @@ const VerticalFader: React.FC<VerticalFaderProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
 
-  // gain is -12 dB to +12 dB
-  // percent from bottom: (-12 -> 0%, 0 -> 50%, +12 -> 100%)
   const clampedGain = Math.max(-12, Math.min(12, gain));
   const percent = ((clampedGain + 12) / 24) * 100;
 
@@ -46,10 +44,9 @@ const VerticalFader: React.FC<VerticalFaderProps> = ({
     if (height <= 0) return;
 
     const clampedY = Math.max(0, Math.min(height, clientY - rect.top));
-    // 0 is top (+12), height is bottom (-12)
-    const ratio = 1 - clampedY / height; // 0 (bottom) to 1 (top)
-    const rawGain = ratio * 24 - 12; // -12 to +12
-    const rounded = Math.round(rawGain * 2) / 2; // 0.5 step
+    const ratio = 1 - clampedY / height;
+    const rawGain = ratio * 24 - 12;
+    const rounded = Math.round(rawGain * 2) / 2;
     onChange(rounded);
   };
 
@@ -57,7 +54,11 @@ const VerticalFader: React.FC<VerticalFaderProps> = ({
     e.preventDefault();
     e.stopPropagation();
     isDragging.current = true;
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignored if pointer capture is not supported by device
+    }
     updateFromPointer(e.clientY);
   };
 
@@ -70,9 +71,9 @@ const VerticalFader: React.FC<VerticalFaderProps> = ({
     if (isDragging.current) {
       isDragging.current = false;
       try {
-        (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+        e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {
-        // ignore
+        // Ignored
       }
     }
   };

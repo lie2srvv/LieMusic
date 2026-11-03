@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ChevronDown,
   Play,
@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Track } from '../types';
 import { Language, translations } from '../i18n/translations';
 import { getHighResThumbnail } from '../utils/thumbnail';
+import { audioEngine } from '../services/audio';
 
 interface FullPlayerProps {
   isOpen: boolean;
@@ -32,7 +33,6 @@ interface FullPlayerProps {
   isFavorite: boolean;
   isShuffle: boolean;
   isRepeat: boolean;
-  visualizerData: Uint8Array;
   isDownloading?: boolean;
   volume?: number;
   onVolumeChange?: (v: number) => void;
@@ -60,7 +60,6 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   isFavorite,
   isShuffle,
   isRepeat,
-  visualizerData,
   isDownloading,
   onTogglePlay,
   onPrev,
@@ -73,6 +72,20 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   onDownloadTrack,
 }) => {
   const t = translations[language];
+
+  // Self-contained visualizer loop: only runs when FullPlayer is open & audio is playing
+  const [visualizerData, setVisualizerData] = useState<Uint8Array>(() => new Uint8Array(24));
+
+  useEffect(() => {
+    if (!isOpen || !isPlaying) return;
+    let rafId: number;
+    const loop = () => {
+      setVisualizerData(audioEngine.getVisualizerData().slice(0, 24));
+      rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [isOpen, isPlaying]);
 
   const formatTime = (secs: number) => {
     if (isNaN(secs)) return '0:00';
@@ -88,73 +101,78 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
           key="full-player"
           initial={{ y: '100%', opacity: 0.6 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: '100%', opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 330, damping: 33 }}
+          exit={{ y: '100%', opacity: 0.2 }}
+          transition={{ type: 'spring', stiffness: 350, damping: 32 }}
           drag="y"
           dragConstraints={{ top: 0 }}
           dragElastic={{ top: 0, bottom: 0.45 }}
           onDragEnd={(_, info) => {
-            if (info.offset.y > 110 || info.velocity.y > 450) {
+            if (info.offset.y > 120 || info.velocity.y > 450) {
               onClose();
             }
           }}
-          className="fixed inset-0 z-50 bg-[#121111] flex flex-col justify-between overflow-hidden"
+          className="fixed inset-0 z-50 flex flex-col justify-between overflow-hidden touch-none"
+          style={{
+            backgroundColor: '#151313',
+            backgroundImage: `radial-gradient(circle at 50% 35%, ${glowColor} 0%, transparent 70%)`,
+          }}
         >
-          {/* Dynamic Ambient Background Glow */}
-          <div
-            className="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-[120px] pointer-events-none opacity-40 transition-all duration-700"
-            style={{ backgroundColor: glowColor }}
-          />
-
-          {/* Top Drag Indicator */}
-          <div className="pt-2 z-10 flex justify-center">
-            <div className="w-10 h-1 bg-white/20 rounded-full" />
-          </div>
-
-          {/* Header with Safe Area Spacing */}
-          <div className="flex items-center justify-between px-6 pt-[max(1.5rem,env(safe-area-inset-top,1.5rem))] pb-2 z-10 shrink-0">
-            <motion.button
-              type="button"
-              onClick={onClose}
-              whileTap={{ scale: 0.88 }}
-              className="w-11 h-11 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-colors cursor-pointer shadow-sm"
-              title={t.collapse}
-            >
-              <ChevronDown size={22} />
-            </motion.button>
-
-            <div className="text-center px-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
-                {t.nowPlaying}
-              </p>
-              <p className="text-xs font-semibold text-neutral-200 mt-0.5 truncate max-w-[180px]">
-                {track.album || (track.source === 'youtube' ? 'YouTube Music' : 'SoundCloud')}
-              </p>
+          {/* Top Bar: Pull down handle & Navigation */}
+          <div className="pt-2">
+            <div className="flex justify-center pb-1">
+              <div className="w-10 h-1 bg-white/20 rounded-full" />
             </div>
 
-            <motion.button
-              type="button"
-              onClick={onToggleFavorite}
-              whileTap={{ scale: 1.25 }}
-              className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all cursor-pointer shadow-sm ${
-                isFavorite
-                  ? 'bg-rose-500/20 text-rose-500 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
-                  : 'bg-white/5 border-white/10 text-neutral-300 hover:text-white'
-              }`}
-              title={isFavorite ? t.inFavorites : t.addToFavorites}
-            >
-              <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
-            </motion.button>
+            <div className="flex items-center justify-between px-6 py-2">
+              <motion.button
+                type="button"
+                onClick={onClose}
+                whileTap={{ scale: 0.85 }}
+                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-colors cursor-pointer"
+                title={t.close}
+              >
+                <ChevronDown size={24} />
+              </motion.button>
+
+              <div className="text-center">
+                <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-widest block">
+                  {t.nowPlaying}
+                </span>
+                <span className="text-xs font-medium text-white/90">
+                  {track.album || track.source}
+                </span>
+              </div>
+
+              <motion.button
+                type="button"
+                onClick={onToggleFavorite}
+                whileTap={{ scale: 1.25 }}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                  isFavorite
+                    ? 'bg-rose-500/20 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                    : 'bg-white/5 text-neutral-400 hover:text-white'
+                }`}
+                title={isFavorite ? t.inFavorites : t.addToFavorites}
+              >
+                <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
+              </motion.button>
+            </div>
           </div>
 
-          {/* Artwork Canvas with subtle glow and spring scale */}
-          <div className="flex-1 flex flex-col items-center justify-center px-8 min-h-0 py-2">
+          {/* Central Artwork & Visualizer */}
+          <div className="flex-1 flex flex-col items-center justify-center px-8 min-h-0">
             <motion.div
-              animate={{ scale: isPlaying ? 1 : 0.93 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
-              className="relative w-72 h-72 sm:w-80 sm:h-80 max-w-[76vw] max-h-[36vh] aspect-square rounded-3xl overflow-hidden shadow-2xl"
+              animate={{
+                scale: isPlaying ? 1 : 0.93,
+              }}
+              transition={{
+                type: 'spring',
+                stiffness: 280,
+                damping: 22,
+              }}
+              className="relative w-full max-w-[280px] aspect-square rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 shrink-0"
               style={{
-                boxShadow: `0 24px 48px -12px ${glowColor}`,
+                boxShadow: isPlaying ? `0 24px 65px -10px ${glowColor}` : '0 20px 50px rgba(0,0,0,0.85)',
               }}
             >
               {track.thumbnail ? (
@@ -165,7 +183,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 />
               ) : (
                 <div className="w-full h-full bg-neutral-900 flex items-center justify-center">
-                  <Disc3 size={64} className="text-neutral-700 animate-spin-slow" />
+                  <Disc3 size={80} className="text-neutral-700 animate-spin" />
                 </div>
               )}
 

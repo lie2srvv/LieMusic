@@ -307,14 +307,13 @@ export const App: React.FC = () => {
       <header className="flex items-center justify-between px-5 pt-8 pb-3 bg-[#151313]/90 backdrop-blur-md border-b border-white/5 safe-area-pt shrink-0 z-20">
         <div className="flex items-center space-x-3">
           <div
-            className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg transition-transform active:scale-95 border border-white/10 shrink-0"
+            className="flex items-center justify-center shrink-0 transition-transform active:scale-95 cursor-pointer"
             style={{
-              backgroundColor: '#1E1B1B',
-              boxShadow: `0 0 16px ${currentTrack ? palette.glow : 'rgba(249, 115, 22, 0.25)'}`,
+              filter: `drop-shadow(0 0 10px ${currentTrack ? palette.glow : 'rgba(249, 115, 22, 0.4)'})`,
             }}
           >
             <FoxLogo
-              className="w-7 h-7 transition-colors duration-500"
+              className="w-9 h-9 transition-colors duration-500"
               color={currentTrack ? palette.accent : '#F97316'}
             />
           </div>

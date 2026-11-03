@@ -240,7 +240,7 @@ fn extract_youtube_videos(val: &serde_json::Value, out: &mut Vec<SearchTrackResu
                 .trim()
                 .to_string();
 
-            let artist = obj
+            let raw_artist = obj
                 .get("ownerText")
                 .or_else(|| obj.get("shortBylineText"))
                 .and_then(|b| {
@@ -251,6 +251,10 @@ fn extract_youtube_videos(val: &serde_json::Value, out: &mut Vec<SearchTrackResu
                         .and_then(|text| text.as_str())
                 })
                 .unwrap_or("YouTube Music")
+                .trim();
+            let artist = raw_artist
+                .strip_suffix(" - Topic")
+                .unwrap_or(raw_artist)
                 .trim()
                 .to_string();
 
@@ -288,7 +292,7 @@ fn extract_youtube_videos(val: &serde_json::Value, out: &mut Vec<SearchTrackResu
             };
 
             let track_id = format!("yt_{}", vid);
-            if !vid.is_empty() && !title.is_empty() && !out.iter().any(|t| t.id == track_id) {
+            if !vid.is_empty() && !title.is_empty() && duration <= 1200 && !out.iter().any(|t| t.id == track_id) {
                 let high_res_thumb = if !vid.is_empty() {
                     format!("https://i.ytimg.com/vi/{}/hqdefault.jpg", vid)
                 } else {

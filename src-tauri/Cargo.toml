@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.0.1"
+version = "1.0.2"
 description = "LieMusic - Zero Server Music Client"
 authors = ["Lie Ecosystem"]
 license = "MIT"

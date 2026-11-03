@@ -604,22 +604,86 @@ export const App: React.FC = () => {
 
         if (searchRequestId.current !== currentReqId) return;
 
-        let filtered = combined;
+        // 1. Smart normalize track artist & title
+        const normalized = combined.map((track) => {
+          let title = track.title.trim();
+          let artist = track.artist.trim();
+
+          // Strip YouTube Music " - Topic"
+          if (artist.endsWith(' - Topic')) {
+            artist = artist.slice(0, -8).trim();
+          }
+
+          // Check if title has format "Artist - Title" (supporting -, –, —)
+          const delimiterMatch = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+          if (delimiterMatch) {
+            const candidateArtist = delimiterMatch[1].trim();
+            const candidateTitle = delimiterMatch[2].trim();
+
+            const artistLower = cleanArtist.toLowerCase();
+            const candArtistLower = candidateArtist.toLowerCase();
+
+            // If user searched for an artist and it matches candidate artist in title:
+            if (artistLower && candArtistLower.includes(artistLower)) {
+              artist = candidateArtist;
+              title = candidateTitle;
+            } else if (
+              // Or if current artist is a generic label or matches candidate artist
+              artist.toLowerCase() === 'youtube music' ||
+              artist.toLowerCase() === 'soundcloud' ||
+              artist.toLowerCase().endsWith('archive') ||
+              candArtistLower === artist.toLowerCase()
+            ) {
+              artist = candidateArtist;
+              title = candidateTitle;
+            }
+          }
+
+          return {
+            ...track,
+            title,
+            artist: artist || track.artist,
+          };
+        });
+
+        // 2. Strict filtering
+        let filtered = normalized;
         if (cleanArtist) {
           const aLower = cleanArtist.toLowerCase();
-          filtered = filtered.filter(
-            (t) =>
-              t.artist.toLowerCase().includes(aLower) ||
-              t.title.toLowerCase().includes(aLower)
+          filtered = filtered.filter((t) => {
+            // Drop long podcasts / interviews > 20 min (1200s)
+            if ((t.duration || 0) > 1200) return false;
+            // STRICT author match: author MUST contain searched author name!
+            return t.artist.toLowerCase().includes(aLower);
+          });
+        }
+
+        if (cleanTitle) {
+          const tLower = cleanTitle.toLowerCase();
+          filtered = filtered.filter((t) =>
+            t.title.toLowerCase().includes(tLower)
           );
         }
 
+        // 3. Sorting
         if (sortBy === 'title') {
           filtered.sort((a, b) => a.title.localeCompare(b.title));
         } else if (sortBy === 'artist') {
           filtered.sort((a, b) => a.artist.localeCompare(b.artist));
         } else if (sortBy === 'duration') {
           filtered.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+        } else if (cleanArtist) {
+          // Relevance sorting: prioritize exact author match at the top
+          const aLower = cleanArtist.toLowerCase();
+          filtered.sort((a, b) => {
+            const aExact = a.artist.toLowerCase() === aLower ? 0 : 1;
+            const bExact = b.artist.toLowerCase() === aLower ? 0 : 1;
+            if (aExact !== bExact) return aExact - bExact;
+
+            const aStarts = a.artist.toLowerCase().startsWith(aLower) ? 0 : 1;
+            const bStarts = b.artist.toLowerCase().startsWith(aLower) ? 0 : 1;
+            return aStarts - bStarts;
+          });
         }
 
         setSearchResults(filtered);

@@ -117,9 +117,9 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             backgroundImage: `radial-gradient(circle at 50% 35%, ${glowColor} 0%, transparent 70%)`,
           }}
         >
-          {/* Top Bar: Pull down handle & Navigation */}
-          <div className="pt-2">
-            <div className="flex justify-center pb-1">
+          {/* Top Bar: Pull down handle & Navigation with safe-area spacing */}
+          <div className="pt-[max(3.5rem,env(safe-area-inset-top,3.5rem))]">
+            <div className="flex justify-center pb-2">
               <div className="w-10 h-1 bg-white/20 rounded-full" />
             </div>
 
@@ -170,7 +170,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 stiffness: 280,
                 damping: 22,
               }}
-              className="relative w-full max-w-[280px] aspect-square rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 shrink-0"
+              className="relative w-full max-w-[250px] sm:max-w-[280px] aspect-square rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/10 shrink-0"
               style={{
                 boxShadow: isPlaying ? `0 24px 65px -10px ${glowColor}` : '0 20px 50px rgba(0,0,0,0.85)',
               }}
@@ -197,10 +197,10 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             </motion.div>
 
             {/* Realtime Audio Visualizer Bars */}
-            <div className="flex items-center justify-center space-x-1.5 h-8 mt-5 px-4 w-full max-w-xs">
+            <div className="flex items-center justify-center space-x-1.5 h-7 mt-4 px-4 w-full max-w-xs">
               {Array.from({ length: 24 }).map((_, i) => {
                 const val = visualizerData[i] || 0;
-                const barHeight = isPlaying ? Math.max(3, (val / 255) * 28) : 3;
+                const barHeight = isPlaying ? Math.max(3, (val / 255) * 24) : 3;
 
                 return (
                   <div
@@ -217,8 +217,8 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             </div>
           </div>
 
-          {/* Track Metadata & Controls */}
-          <div className="px-7 pt-2 pb-[max(3rem,env(safe-area-inset-bottom,3rem))] space-y-6 shrink-0">
+          {/* Track Metadata & Controls with elevated bottom padding */}
+          <div className="px-7 pt-2 pb-[max(5.5rem,env(safe-area-inset-bottom,5.5rem))] space-y-5 shrink-0">
             {/* Track Title, Artist & Quick Actions */}
             <div className="flex items-center justify-between">
               <div className="min-w-0 pr-4 flex-1">

@@ -35,6 +35,12 @@ fn get_app_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| format!("Failed to get app data dir: {}", e))
 }
 
+fn sanitize_track_id(id: &str) -> String {
+    id.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect()
+}
+
 fn ensure_offline_server_started(app_dir: PathBuf) {
     if OFFLINE_SERVER_STARTED.swap(true, Ordering::SeqCst) {
         return;
@@ -66,10 +72,17 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                     }
 
                     let path = parts[1];
-                    let track_id = path
+                    let raw_id = path
                         .trim_start_matches("/offline/")
                         .trim_start_matches("/track/");
-                    let file_path = dir.join("downloads").join(format!("{}.audio", track_id));
+                    let clean_id = sanitize_track_id(raw_id);
+                    if clean_id.is_empty() {
+                        let bad_req = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+                        let _ = stream.write_all(bad_req.as_bytes()).await;
+                        return;
+                    }
+
+                    let file_path = dir.join("downloads").join(format!("{}.audio", clean_id));
 
                     if !file_path.exists() {
                         let not_found = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
@@ -566,6 +579,11 @@ async fn download_track_file(
     stream_url: Option<String>,
     source: String,
 ) -> Result<String, String> {
+    let clean_id = sanitize_track_id(&track_id);
+    if clean_id.is_empty() {
+        return Err("Invalid track ID".into());
+    }
+
     let dir = get_app_dir(&app)?;
     let dl_dir = dir.join("downloads");
     if !dl_dir.exists() {
@@ -629,7 +647,7 @@ async fn download_track_file(
         return Err("Downloaded audio content was empty".into());
     }
 
-    let file_path = dl_dir.join(format!("{}.audio", track_id));
+    let file_path = dl_dir.join(format!("{}.audio", clean_id));
     fs::write(&file_path, &full_audio_bytes)
         .map_err(|e| format!("Failed to write track file: {}", e))?;
 
@@ -641,19 +659,21 @@ async fn download_track_file(
 
 #[tauri::command]
 fn get_downloaded_track_audio(app: tauri::AppHandle, track_id: String) -> Result<String, String> {
+    let clean_id = sanitize_track_id(&track_id);
     let dir = get_app_dir(&app)?;
-    let file_path = dir.join("downloads").join(format!("{}.audio", track_id));
+    let file_path = dir.join("downloads").join(format!("{}.audio", clean_id));
     if !file_path.exists() {
         return Err("Track not found in local offline storage".into());
     }
     ensure_offline_server_started(dir);
-    Ok(format!("http://127.0.0.1:28491/offline/{}", track_id))
+    Ok(format!("http://127.0.0.1:28491/offline/{}", clean_id))
 }
 
 #[tauri::command]
 fn delete_downloaded_track_file(app: tauri::AppHandle, track_id: String) -> Result<(), String> {
+    let clean_id = sanitize_track_id(&track_id);
     let dir = get_app_dir(&app)?;
-    let file_path = dir.join("downloads").join(format!("{}.audio", track_id));
+    let file_path = dir.join("downloads").join(format!("{}.audio", clean_id));
     if file_path.exists() {
         let _ = fs::remove_file(file_path);
     }

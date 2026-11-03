@@ -8,7 +8,13 @@ import {
   Play,
   Sliders,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  Download,
 } from 'lucide-react';
+import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
+import { CellularDownloadModal } from './components/CellularDownloadModal';
+import { isCellularConnection } from './utils/network';
 import { Track, EqualizerPreset, AudioSource } from './types';
 import { extractPaletteFromImage, ExtractedPalette } from './utils/colorExtractor';
 import { audioEngine } from './services/audio';
@@ -68,6 +74,22 @@ export const App: React.FC = () => {
 
   const [equalizerBands, setEqualizerBands] = useState<number[]>([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   const [bassBoost, setBassBoost] = useState<number>(0);
+
+  // Section expand states (default 3 items)
+  const [isHomeHistoryExpanded, setIsHomeHistoryExpanded] = useState<boolean>(false);
+  const [isLibraryHistoryExpanded, setIsLibraryHistoryExpanded] = useState<boolean>(false);
+  const [isFavoritesExpanded, setIsFavoritesExpanded] = useState<boolean>(false);
+
+  // Multi-select states
+  const [isFavSelectMode, setIsFavSelectMode] = useState<boolean>(false);
+  const [selectedFavIds, setSelectedFavIds] = useState<Set<string>>(new Set());
+
+  const [isOfflineSelectMode, setIsOfflineSelectMode] = useState<boolean>(false);
+  const [selectedOfflineIds, setSelectedOfflineIds] = useState<Set<string>>(new Set());
+
+  // Dialog prompts
+  const [deletePrompt, setDeletePrompt] = useState<{ trackIds: string[]; trackTitle?: string } | null>(null);
+  const [cellularPrompt, setCellularPrompt] = useState<{ tracks: Track[] } | null>(null);
 
   useEffect(() => {
     const cachedFavs = localStorage.getItem('liemusic_favorites');
@@ -204,7 +226,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleDownloadTrack = async (track: Track) => {
+  const executeDownload = async (track: Track) => {
     if (downloadingIds.has(track.id) || downloadedTrackIds.has(track.id)) {
       return;
     }
@@ -236,13 +258,54 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleDeleteDownload = async (trackId: string) => {
-    try {
-      await invoke('delete_downloaded_track_file', { trackId });
-    } catch (err) {
-      console.warn('[LieMusic] Error deleting track file:', err);
+  const requestDownloadTrack = (track: Track) => {
+    if (isCellularConnection() && localStorage.getItem('liemusic_allow_cellular_downloads') !== 'true') {
+      setCellularPrompt({ tracks: [track] });
+      return;
     }
-    setDownloadedTracks((prev) => prev.filter((t) => t.id !== trackId));
+    executeDownload(track);
+  };
+
+  const requestDownloadMultiple = (tracksToDownload: Track[]) => {
+    if (tracksToDownload.length === 0) return;
+    if (isCellularConnection() && localStorage.getItem('liemusic_allow_cellular_downloads') !== 'true') {
+      setCellularPrompt({ tracks: tracksToDownload });
+      return;
+    }
+    for (const t of tracksToDownload) {
+      executeDownload(t);
+    }
+  };
+
+  const executeDeleteDownload = async (trackIds: string[]) => {
+    for (const id of trackIds) {
+      try {
+        await invoke('delete_downloaded_track_file', { trackId: id });
+      } catch (err) {
+        console.warn('[LieMusic] Error deleting track file:', err);
+      }
+    }
+    const idSet = new Set(trackIds);
+    setDownloadedTracks((prev) => prev.filter((t) => !idSet.has(t.id)));
+  };
+
+  const requestDeleteDownload = (trackId: string, trackTitle?: string) => {
+    if (localStorage.getItem('liemusic_dont_ask_delete') === 'true') {
+      executeDeleteDownload([trackId]);
+      return;
+    }
+    setDeletePrompt({ trackIds: [trackId], trackTitle });
+  };
+
+  const requestDeleteMultipleDownloads = (trackIds: string[]) => {
+    if (trackIds.length === 0) return;
+    if (localStorage.getItem('liemusic_dont_ask_delete') === 'true') {
+      executeDeleteDownload(trackIds);
+      setSelectedOfflineIds(new Set());
+      setIsOfflineSelectMode(false);
+      return;
+    }
+    setDeletePrompt({ trackIds });
   };
 
   const handleToggleFavorite = (track: Track) => {
@@ -252,8 +315,26 @@ export const App: React.FC = () => {
       setFavorites((prev) => prev.filter((t) => t.id !== track.id));
     } else {
       setFavorites((prev) => [track, ...prev]);
-      handleDownloadTrack(track);
+      requestDownloadTrack(track);
     }
+  };
+
+  const toggleSelectFav = (trackId: string) => {
+    setSelectedFavIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(trackId)) next.delete(trackId);
+      else next.add(trackId);
+      return next;
+    });
+  };
+
+  const toggleSelectOffline = (trackId: string) => {
+    setSelectedOfflineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(trackId)) next.delete(trackId);
+      else next.add(trackId);
+      return next;
+    });
   };
 
   const handleSearch = async (query: string, sourceOverride?: AudioSource | 'all') => {
@@ -418,21 +499,32 @@ export const App: React.FC = () => {
 
               <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
                 {history.length > 0 ? (
-                  history.slice(0, 8).map((track) => (
-                    <TrackListItem
-                      key={`home_${track.id}`}
-                      track={track}
-                      isCurrent={currentTrack?.id === track.id}
-                      isPlaying={isPlaying}
-                      isFavorite={favoriteTrackIds.has(track.id)}
-                      isDownloaded={downloadedTrackIds.has(track.id)}
-                      fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
-                      accentColor={palette.accent}
-                      onPlay={() => handlePlayTrack(track, history)}
-                      onToggleFavorite={() => handleToggleFavorite(track)}
-                      onDownload={() => handleDownloadTrack(track)}
-                    />
-                  ))
+                  <>
+                    {(isHomeHistoryExpanded ? history : history.slice(0, 3)).map((track) => (
+                      <TrackListItem
+                        key={`home_${track.id}`}
+                        track={track}
+                        isCurrent={currentTrack?.id === track.id}
+                        isPlaying={isPlaying}
+                        isFavorite={favoriteTrackIds.has(track.id)}
+                        isDownloaded={downloadedTrackIds.has(track.id)}
+                        fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
+                        accentColor={palette.accent}
+                        onPlay={() => handlePlayTrack(track, history)}
+                        onToggleFavorite={() => handleToggleFavorite(track)}
+                        onDownload={() => requestDownloadTrack(track)}
+                      />
+                    ))}
+                    {history.length > 3 && (
+                      <button
+                        onClick={() => setIsHomeHistoryExpanded((prev) => !prev)}
+                        className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
+                      >
+                        <span>{isHomeHistoryExpanded ? 'Свернуть' : `Показать ещё (все ${history.length})`}</span>
+                        {isHomeHistoryExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <div className="py-8 text-center text-neutral-500 space-y-1">
                     <p className="text-xs">Вы пока ничего не слушали</p>
@@ -517,7 +609,7 @@ export const App: React.FC = () => {
                     accentColor={palette.accent}
                     onPlay={() => handlePlayTrack(track, searchResults)}
                     onToggleFavorite={() => handleToggleFavorite(track)}
-                    onDownload={() => handleDownloadTrack(track)}
+                    onDownload={() => requestDownloadTrack(track)}
                   />
                 ))
               ) : searchQuery ? (
@@ -539,6 +631,7 @@ export const App: React.FC = () => {
         {/* TAB 3: LIBRARY */}
         {activeTab === 'library' && (
           <div className="max-w-xl mx-auto space-y-6">
+            {/* Favorites Section */}
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
@@ -546,32 +639,130 @@ export const App: React.FC = () => {
                   <span>Любимые треки ({favorites.length})</span>
                 </h3>
                 {favorites.length > 0 && (
-                  <button
-                    onClick={() => handlePlayTrack(favorites[0], favorites)}
-                    className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
-                  >
-                    Слушать все
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    {isFavoritesExpanded && (
+                      <>
+                        <button
+                          onClick={() =>
+                            requestDownloadMultiple(
+                              favorites.filter((t) => !downloadedTrackIds.has(t.id))
+                            )
+                          }
+                          className="text-xs text-neutral-300 hover:text-emerald-400 flex items-center space-x-1 py-1 px-2.5 rounded-xl bg-white/5 border border-white/5 transition-colors cursor-pointer"
+                          title="Скачать все в память"
+                        >
+                          <Download size={13} />
+                          <span>Скачать все</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsFavSelectMode((prev) => !prev);
+                            setSelectedFavIds(new Set());
+                          }}
+                          className={`text-xs py-1 px-2.5 rounded-xl border transition-all cursor-pointer font-medium ${
+                            isFavSelectMode
+                              ? 'bg-rose-500 text-white border-rose-500'
+                              : 'bg-white/5 border-white/5 text-neutral-300 hover:text-white'
+                          }`}
+                        >
+                          {isFavSelectMode ? 'Готово' : 'Выбрать'}
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => handlePlayTrack(favorites[0], favorites)}
+                      className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                    >
+                      Слушать все
+                    </button>
+                  </div>
                 )}
               </div>
 
+              {/* Selection action bar for Favorites */}
+              {isFavSelectMode && favorites.length > 0 && (
+                <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/10 text-xs">
+                  <span className="font-medium text-neutral-300">
+                    Выбрано: {selectedFavIds.size} из {favorites.length}
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => {
+                        if (selectedFavIds.size === favorites.length) {
+                          setSelectedFavIds(new Set());
+                        } else {
+                          setSelectedFavIds(new Set(favorites.map((t) => t.id)));
+                        }
+                      }}
+                      className="text-neutral-400 hover:text-white px-2 py-1 rounded-lg bg-white/5 cursor-pointer"
+                    >
+                      {selectedFavIds.size === favorites.length ? 'Снять всё' : 'Все'}
+                    </button>
+                    {selectedFavIds.size > 0 && (
+                      <>
+                        <button
+                          onClick={() => {
+                            const selected = favorites.filter((t) => selectedFavIds.has(t.id));
+                            requestDownloadMultiple(selected);
+                          }}
+                          className="text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
+                        >
+                          <Download size={13} />
+                          <span>Скачать ({selectedFavIds.size})</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFavorites((prev) => prev.filter((t) => !selectedFavIds.has(t.id)));
+                            setSelectedFavIds(new Set());
+                            setIsFavSelectMode(false);
+                          }}
+                          className="text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
+                        >
+                          <Trash2 size={13} />
+                          <span>Убрать</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
                 {favorites.length > 0 ? (
-                  favorites.map((track) => (
-                    <TrackListItem
-                      key={`fav_${track.id}`}
-                      track={track}
-                      isCurrent={currentTrack?.id === track.id}
-                      isPlaying={isPlaying}
-                      isFavorite={true}
-                      isDownloaded={downloadedTrackIds.has(track.id)}
-                      fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
-                      accentColor={palette.accent}
-                      onPlay={() => handlePlayTrack(track, favorites)}
-                      onToggleFavorite={() => handleToggleFavorite(track)}
-                      onDownload={() => handleDownloadTrack(track)}
-                    />
-                  ))
+                  <>
+                    {(isFavoritesExpanded ? favorites : favorites.slice(0, 3)).map((track) => (
+                      <TrackListItem
+                        key={`fav_${track.id}`}
+                        track={track}
+                        isCurrent={currentTrack?.id === track.id}
+                        isPlaying={isPlaying}
+                        isFavorite={true}
+                        isDownloaded={downloadedTrackIds.has(track.id)}
+                        fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
+                        accentColor={palette.accent}
+                        isSelectMode={isFavSelectMode}
+                        isSelected={selectedFavIds.has(track.id)}
+                        onSelect={() => toggleSelectFav(track.id)}
+                        onLongPress={() => {
+                          setIsFavoritesExpanded(true);
+                          setIsFavSelectMode(true);
+                          toggleSelectFav(track.id);
+                        }}
+                        onPlay={() => handlePlayTrack(track, favorites)}
+                        onToggleFavorite={() => handleToggleFavorite(track)}
+                        onDownload={() => requestDownloadTrack(track)}
+                      />
+                    ))}
+                    {favorites.length > 3 && (
+                      <button
+                        onClick={() => setIsFavoritesExpanded((prev) => !prev)}
+                        className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
+                      >
+                        <span>{isFavoritesExpanded ? 'Свернуть' : `Показать все (${favorites.length})`}</span>
+                        {isFavoritesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <div className="py-12 text-center text-neutral-500 space-y-1">
                     <p className="text-xs">В любимых пока пусто</p>
@@ -583,6 +774,7 @@ export const App: React.FC = () => {
               </div>
             </div>
 
+            {/* History Section */}
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
@@ -605,21 +797,32 @@ export const App: React.FC = () => {
 
               <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
                 {history.length > 0 ? (
-                  history.map((track) => (
-                    <TrackListItem
-                      key={`lib_hist_${track.id}`}
-                      track={track}
-                      isCurrent={currentTrack?.id === track.id}
-                      isPlaying={isPlaying}
-                      isFavorite={favoriteTrackIds.has(track.id)}
-                      isDownloaded={downloadedTrackIds.has(track.id)}
-                      fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
-                      accentColor={palette.accent}
-                      onPlay={() => handlePlayTrack(track, history)}
-                      onToggleFavorite={() => handleToggleFavorite(track)}
-                      onDownload={() => handleDownloadTrack(track)}
-                    />
-                  ))
+                  <>
+                    {(isLibraryHistoryExpanded ? history : history.slice(0, 3)).map((track) => (
+                      <TrackListItem
+                        key={`lib_hist_${track.id}`}
+                        track={track}
+                        isCurrent={currentTrack?.id === track.id}
+                        isPlaying={isPlaying}
+                        isFavorite={favoriteTrackIds.has(track.id)}
+                        isDownloaded={downloadedTrackIds.has(track.id)}
+                        fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
+                        accentColor={palette.accent}
+                        onPlay={() => handlePlayTrack(track, history)}
+                        onToggleFavorite={() => handleToggleFavorite(track)}
+                        onDownload={() => requestDownloadTrack(track)}
+                      />
+                    ))}
+                    {history.length > 3 && (
+                      <button
+                        onClick={() => setIsLibraryHistoryExpanded((prev) => !prev)}
+                        className="w-full py-2.5 mt-1 text-xs text-neutral-400 hover:text-white flex items-center justify-center space-x-1.5 transition-colors cursor-pointer rounded-2xl hover:bg-white/5 active:scale-[0.99]"
+                      >
+                        <span>{isLibraryHistoryExpanded ? 'Свернуть' : `Показать ещё (все ${history.length})`}</span>
+                        {isLibraryHistoryExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <div className="py-12 text-center text-neutral-500">
                     <p className="text-xs">История пуста</p>
@@ -647,15 +850,62 @@ export const App: React.FC = () => {
               </div>
 
               {downloadedTracks.length > 0 && (
-                <button
-                  onClick={() => handlePlayTrack(downloadedTracks[0], downloadedTracks)}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center space-x-1.5 shadow transition-all active:scale-95 cursor-pointer"
-                >
-                  <Play size={13} fill="currentColor" />
-                  <span>Слушать всё</span>
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      setIsOfflineSelectMode((prev) => !prev);
+                      setSelectedOfflineIds(new Set());
+                    }}
+                    className={`px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold cursor-pointer ${
+                      isOfflineSelectMode
+                        ? 'bg-rose-500 text-white border-rose-500'
+                        : 'bg-white/10 border-white/10 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    {isOfflineSelectMode ? 'Готово' : 'Выбрать'}
+                  </button>
+                  <button
+                    onClick={() => handlePlayTrack(downloadedTracks[0], downloadedTracks)}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center space-x-1.5 shadow transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Play size={13} fill="currentColor" />
+                    <span>Слушать всё</span>
+                  </button>
+                </div>
               )}
             </div>
+
+            {/* Selection action bar for Offline */}
+            {isOfflineSelectMode && downloadedTracks.length > 0 && (
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/10 text-xs">
+                <span className="font-medium text-neutral-300">
+                  Выбрано: {selectedOfflineIds.size} из {downloadedTracks.length}
+                </span>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      if (selectedOfflineIds.size === downloadedTracks.length) {
+                        setSelectedOfflineIds(new Set());
+                      } else {
+                        setSelectedOfflineIds(new Set(downloadedTracks.map((t) => t.id)));
+                      }
+                    }}
+                    className="text-neutral-400 hover:text-white px-2 py-1 rounded-lg bg-white/5 cursor-pointer"
+                  >
+                    {selectedOfflineIds.size === downloadedTracks.length ? 'Снять всё' : 'Все'}
+                  </button>
+                  {selectedOfflineIds.size > 0 && (
+                    <button
+                      onClick={() => requestDeleteMultipleDownloads(Array.from(selectedOfflineIds))}
+                      className="text-rose-400 hover:text-rose-300 px-3 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 font-medium flex items-center space-x-1 cursor-pointer active:scale-95"
+                    >
+                      <Trash2 size={13} />
+                      <span>Удалить ({selectedOfflineIds.size})</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
               {downloadedTracks.length > 0 ? (
@@ -669,9 +919,16 @@ export const App: React.FC = () => {
                     isDownloaded={true}
                     fileSize={track.fileSize}
                     accentColor={palette.accent}
+                    isSelectMode={isOfflineSelectMode}
+                    isSelected={selectedOfflineIds.has(track.id)}
+                    onSelect={() => toggleSelectOffline(track.id)}
+                    onLongPress={() => {
+                      setIsOfflineSelectMode(true);
+                      toggleSelectOffline(track.id);
+                    }}
                     onPlay={() => handlePlayTrack(track, downloadedTracks)}
                     onToggleFavorite={() => handleToggleFavorite(track)}
-                    onDeleteDownload={() => handleDeleteDownload(track.id)}
+                    onDeleteDownload={() => requestDeleteDownload(track.id, track.title)}
                   />
                 ))
               ) : (
@@ -741,7 +998,7 @@ export const App: React.FC = () => {
           audioEngine.setVolume(v);
         }}
         onOpenEqualizer={() => setIsEqualizerOpen(true)}
-        onDownloadTrack={() => currentTrack && handleDownloadTrack(currentTrack)}
+        onDownloadTrack={() => currentTrack && requestDownloadTrack(currentTrack)}
       />
 
       <EqualizerModal
@@ -765,6 +1022,43 @@ export const App: React.FC = () => {
           setBassBoost(preset.bassBoost || 0);
           audioEngine.applyPreset(preset);
         }}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={!!deletePrompt}
+        count={deletePrompt?.trackIds.length || 0}
+        trackTitle={deletePrompt?.trackTitle}
+        onConfirm={(dontAskAgain) => {
+          if (dontAskAgain) {
+            localStorage.setItem('liemusic_dont_ask_delete', 'true');
+          }
+          if (deletePrompt) {
+            executeDeleteDownload(deletePrompt.trackIds);
+            if (isOfflineSelectMode) {
+              setSelectedOfflineIds(new Set());
+              setIsOfflineSelectMode(false);
+            }
+          }
+          setDeletePrompt(null);
+        }}
+        onCancel={() => setDeletePrompt(null)}
+      />
+
+      <CellularDownloadModal
+        isOpen={!!cellularPrompt}
+        count={cellularPrompt?.tracks.length || 1}
+        onConfirm={(dontAskAgain) => {
+          if (dontAskAgain) {
+            localStorage.setItem('liemusic_allow_cellular_downloads', 'true');
+          }
+          if (cellularPrompt) {
+            for (const t of cellularPrompt.tracks) {
+              executeDownload(t);
+            }
+          }
+          setCellularPrompt(null);
+        }}
+        onCancel={() => setCellularPrompt(null)}
       />
     </div>
   );

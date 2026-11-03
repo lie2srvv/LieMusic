@@ -465,7 +465,7 @@ async fn search_music_native(
                             .and_then(|d| d.as_u64())
                             .map(|ms| ms / 1000)
                             .unwrap_or(180);
-                        let thumbnail = item
+                        let raw_thumb = item
                             .get("artwork_url")
                             .and_then(|a| a.as_str())
                             .or_else(|| {
@@ -473,8 +473,11 @@ async fn search_music_native(
                                     .and_then(|u| u.get("avatar_url"))
                                     .and_then(|a| a.as_str())
                             })
-                            .unwrap_or("https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500")
-                            .to_string();
+                            .unwrap_or("https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500");
+                        let thumbnail = raw_thumb
+                            .replace("-large.", "-t500x500.")
+                            .replace("-badge.", "-t500x500.")
+                            .replace("-small.", "-t500x500.");
 
                         let stream_url = item
                             .get("media")

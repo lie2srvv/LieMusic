@@ -69,16 +69,22 @@ export async function searchSoundCloudTracks(query: string): Promise<Track[]> {
     });
 
     if (raw && Array.isArray(raw) && raw.length > 0) {
-      return raw.map((item) => ({
-        id: item.id,
-        title: item.title,
-        artist: item.artist || 'SoundCloud',
-        album: item.album || 'SoundCloud',
-        duration: item.duration || 180,
-        thumbnail: item.thumbnail || 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500',
-        source: 'soundcloud' as const,
-        streamUrl: item.streamUrl || item.stream_url,
-      }));
+      return raw.map((item) => {
+        const thumb = (item.thumbnail || item.artwork_url || '')
+          .replace('-large.', '-t500x500.')
+          .replace('-badge.', '-t500x500.');
+
+        return {
+          id: item.id,
+          title: item.title,
+          artist: item.artist || 'SoundCloud',
+          album: item.album || 'SoundCloud',
+          duration: item.duration || 180,
+          thumbnail: thumb || 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500',
+          source: 'soundcloud' as const,
+          streamUrl: item.streamUrl || item.stream_url,
+        };
+      });
     }
   } catch (err) {
     console.warn('[LieMusic] Native SoundCloud search failed, falling back:', err);

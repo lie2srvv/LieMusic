@@ -217,13 +217,30 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         <div className="flex items-center justify-between pt-2 px-2">
           <button
             onClick={onToggleShuffle}
-            className={`p-2 rounded-full transition-colors cursor-pointer ${
-              isShuffle ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
+            className={`relative p-2.5 rounded-full transition-all active:scale-90 cursor-pointer flex flex-col items-center justify-center ${
+              isShuffle
+                ? 'bg-white/15 text-white shadow-lg'
+                : 'text-neutral-500 hover:text-neutral-300'
             }`}
-            style={{ color: isShuffle ? accentColor : undefined }}
-            title="Перемешать"
+            style={
+              isShuffle
+                ? {
+                    color: '#FFFFFF',
+                    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+                    boxShadow: '0 0 18px rgba(255, 255, 255, 0.8), 0 0 8px #FFFFFF',
+                    border: '1.5px solid rgba(255, 255, 255, 0.9)',
+                  }
+                : undefined
+            }
+            title={isShuffle ? 'Перемешивание включено' : 'Перемешать'}
           >
-            <Shuffle size={20} />
+            <Shuffle size={20} className={isShuffle ? 'stroke-[2.5]' : ''} />
+            {isShuffle && (
+              <span
+                className="absolute -bottom-1 w-1.5 h-1.5 rounded-full shadow-sm"
+                style={{ backgroundColor: accentColor || '#FFFFFF' }}
+              />
+            )}
           </button>
 
           <button
@@ -261,13 +278,30 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
 
           <button
             onClick={onToggleRepeat}
-            className={`p-2 rounded-full transition-colors cursor-pointer ${
-              isRepeat ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
+            className={`relative p-2.5 rounded-full transition-all active:scale-90 cursor-pointer flex flex-col items-center justify-center ${
+              isRepeat
+                ? 'bg-white/15 text-white shadow-lg'
+                : 'text-neutral-500 hover:text-neutral-300'
             }`}
-            style={{ color: isRepeat ? accentColor : undefined }}
-            title="Повтор трека"
+            style={
+              isRepeat
+                ? {
+                    color: '#FFFFFF',
+                    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+                    boxShadow: '0 0 18px rgba(255, 255, 255, 0.8), 0 0 8px #FFFFFF',
+                    border: '1.5px solid rgba(255, 255, 255, 0.9)',
+                  }
+                : undefined
+            }
+            title={isRepeat ? 'Повтор включен' : 'Повтор трека'}
           >
-            <Repeat size={20} />
+            <Repeat size={20} className={isRepeat ? 'stroke-[2.5]' : ''} />
+            {isRepeat && (
+              <span
+                className="absolute -bottom-1 w-1.5 h-1.5 rounded-full shadow-sm"
+                style={{ backgroundColor: accentColor || '#FFFFFF' }}
+              />
+            )}
           </button>
         </div>
       </div>

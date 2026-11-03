@@ -73,13 +73,31 @@ class AudioEngine {
         if (this.onPrevCallback) this.onPrevCallback();
       }
     });
+
+    window.addEventListener('android_media_seek', (event: any) => {
+      const seconds = event.detail;
+      if (typeof seconds === 'number' && !isNaN(seconds)) {
+        this.seek(seconds);
+      }
+    });
   }
 
   private syncAndroidNotification(isPlaying: boolean) {
     try {
       const bridge = (window as any).AndroidMediaNotification;
       if (bridge && this.currentTrack) {
-        bridge.updateState(this.currentTrack.title, this.currentTrack.artist, isPlaying);
+        const posMs = Math.round((this.audio.currentTime || 0) * 1000);
+        const durMs = Math.round(
+          (isNaN(this.audio.duration) ? (this.currentTrack.duration || 0) : this.audio.duration) * 1000
+        );
+        bridge.updateState(
+          this.currentTrack.title || 'LieMusic',
+          this.currentTrack.artist || 'Свободный стриминг',
+          this.currentTrack.thumbnail || '',
+          isPlaying,
+          posMs,
+          durMs
+        );
       }
     } catch (e) {
       console.warn('[LieMusic] Android notification bridge sync error:', e);
@@ -118,7 +136,7 @@ class AudioEngine {
       this.analyserNode.fftSize = 64;
       this.analyserNode.smoothingTimeConstant = 0.8;
 
-      // Connect chain: source -> bass -> filter1 -> ... -> filter10 -> gain -> analyser -> destination
+      // Connect graph: source -> bass -> eq[0]...eq[9] -> gain -> analyser -> destination
       let lastNode: AudioNode = this.sourceNode;
       lastNode.connect(this.bassNode);
       lastNode = this.bassNode;
@@ -133,27 +151,24 @@ class AudioEngine {
       this.analyserNode.connect(this.audioCtx.destination);
 
       this.isInitialized = true;
-    } catch (e) {
-      console.warn('[LieMusic] Web Audio API init warning:', e);
+    } catch (err) {
+      console.warn('[LieMusic] Web Audio API init warning (likely autoplay policy):', err);
     }
   }
 
   public async playTrack(track: Track, streamUrl: string) {
     this.currentTrack = track;
-
-    // For local loopback or data URLs, do NOT use crossOrigin='anonymous'
-    if (streamUrl.includes('127.0.0.1') || streamUrl.startsWith('data:') || streamUrl.startsWith('blob:')) {
-      this.audio.removeAttribute('crossorigin');
-    } else {
-      this.audio.crossOrigin = 'anonymous';
-    }
-
     this.initAudioNodes();
 
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      try {
-        await this.audioCtx.resume();
-      } catch {}
+      await this.audioCtx.resume().catch(console.error);
+    }
+
+    // Only use anonymous CORS when streaming from remote CDN, NOT from local loopback or data URLs!
+    if (streamUrl.startsWith('http://127.0.0.1') || streamUrl.startsWith('http://localhost') || streamUrl.startsWith('data:')) {
+      this.audio.removeAttribute('crossorigin');
+    } else {
+      this.audio.crossOrigin = 'anonymous';
     }
 
     this.audio.src = streamUrl;
@@ -191,6 +206,7 @@ class AudioEngine {
   public seek(seconds: number) {
     if (!isNaN(seconds) && isFinite(seconds)) {
       this.audio.currentTime = Math.max(0, Math.min(seconds, this.audio.duration || 9999));
+      this.syncAndroidNotification(!this.audio.paused);
     }
   }
 
@@ -199,43 +215,27 @@ class AudioEngine {
     this.audio.volume = clamped;
   }
 
-  public getVolume(): number {
-    return this.audio.volume;
-  }
-
-  public isPlaying(): boolean {
-    return !this.audio.paused && !this.audio.ended && this.audio.readyState > 2;
-  }
-
-  public getCurrentTime(): number {
-    return this.audio.currentTime || 0;
-  }
-
-  public getDuration(): number {
-    return isNaN(this.audio.duration) ? (this.currentTrack?.duration || 0) : this.audio.duration;
-  }
-
-  public setBandGain(index: number, dbGain: number) {
+  public setEqualizerGain(bandIndex: number, gainDb: number) {
     this.initAudioNodes();
-    if (this.filters[index]) {
-      this.filters[index].gain.value = Math.max(-12, Math.min(12, dbGain));
+    if (this.filters[bandIndex]) {
+      this.filters[bandIndex].gain.setTargetAtTime(gainDb, this.audioCtx?.currentTime || 0, 0.05);
     }
   }
 
-  public setBassBoost(level: number) {
+  public setBandGain(bandIndex: number, gainDb: number) {
+    this.setEqualizerGain(bandIndex, gainDb);
+  }
+
+  public setBassBoost(gainDb: number) {
     this.initAudioNodes();
     if (this.bassNode) {
-      const gain = (Math.max(0, Math.min(100, level)) / 100) * 12;
-      this.bassNode.gain.value = gain;
+      this.bassNode.gain.setTargetAtTime(gainDb, this.audioCtx?.currentTime || 0, 0.05);
     }
   }
 
   public applyPreset(preset: EqualizerPreset) {
-    this.initAudioNodes();
-    preset.bands.forEach((gain, i) => {
-      this.setBandGain(i, gain);
-    });
-    this.setBassBoost(preset.bassBoost || 0);
+    preset.bands.forEach((gain, i) => this.setEqualizerGain(i, gain));
+    this.setBassBoost(preset.bassBoost ?? 0);
   }
 
   public getVisualizerData(): Uint8Array {
@@ -247,6 +247,18 @@ class AudioEngine {
     return data;
   }
 
+  public getCurrentTime(): number {
+    return this.audio.currentTime || 0;
+  }
+
+  public getDuration(): number {
+    return isNaN(this.audio.duration) ? (this.currentTrack?.duration || 0) : this.audio.duration;
+  }
+
+  public isPlaying(): boolean {
+    return !this.audio.paused;
+  }
+
   private updateMediaSession() {
     if (!('mediaSession' in navigator) || !this.currentTrack) return;
 
@@ -256,12 +268,17 @@ class AudioEngine {
         artist: this.currentTrack.artist,
         album: this.currentTrack.album || 'LieMusic',
         artwork: [
+          { src: this.currentTrack.thumbnail, sizes: '96x96', type: 'image/jpeg' },
+          { src: this.currentTrack.thumbnail, sizes: '128x128', type: 'image/jpeg' },
+          { src: this.currentTrack.thumbnail, sizes: '192x192', type: 'image/jpeg' },
           { src: this.currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' },
         ],
       });
 
       navigator.mediaSession.playbackState = this.audio.paused ? 'paused' : 'playing';
-    } catch {}
+    } catch (e) {
+      console.warn('[LieMusic] MediaSession metadata error:', e);
+    }
   }
 
   private setupMediaSessionHandlers() {

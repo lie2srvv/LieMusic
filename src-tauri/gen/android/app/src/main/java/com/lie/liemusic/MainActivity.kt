@@ -25,16 +25,35 @@ class MainActivity : TauriActivity() {
         )
       }
     }
+
+    fun dispatchSeekAction(seconds: Double) {
+      webViewRef?.post {
+        webViewRef?.evaluateJavascript(
+          "window.dispatchEvent(new CustomEvent('android_media_seek', { detail: $seconds }));",
+          null
+        )
+      }
+    }
   }
 
   inner class MediaNotificationBridge(private val context: Context) {
     @JavascriptInterface
-    fun updateState(title: String, artist: String, isPlaying: Boolean) {
+    fun updateState(
+      title: String,
+      artist: String,
+      coverUrl: String,
+      isPlaying: Boolean,
+      positionMs: Long,
+      durationMs: Long
+    ) {
       val intent = Intent(context, MediaPlaybackService::class.java).apply {
         action = MediaPlaybackService.ACTION_UPDATE
         putExtra(MediaPlaybackService.EXTRA_TITLE, title)
         putExtra(MediaPlaybackService.EXTRA_ARTIST, artist)
+        putExtra(MediaPlaybackService.EXTRA_COVER_URL, coverUrl)
         putExtra(MediaPlaybackService.EXTRA_IS_PLAYING, isPlaying)
+        putExtra(MediaPlaybackService.EXTRA_POSITION_MS, positionMs)
+        putExtra(MediaPlaybackService.EXTRA_DURATION_MS, durationMs)
       }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         context.startForegroundService(intent)

@@ -8,14 +8,24 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MediaPlaybackService : Service() {
     companion object {
         const val CHANNEL_ID = "liemusic_playback_channel"
         const val NOTIFICATION_ID = 24901
+
         const val ACTION_UPDATE = "com.lie.liemusic.ACTION_UPDATE"
         const val ACTION_TOGGLE = "com.lie.liemusic.ACTION_TOGGLE"
         const val ACTION_NEXT = "com.lie.liemusic.ACTION_NEXT"
@@ -24,28 +34,83 @@ class MediaPlaybackService : Service() {
 
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_ARTIST = "extra_artist"
+        const val EXTRA_COVER_URL = "extra_cover_url"
         const val EXTRA_IS_PLAYING = "extra_is_playing"
+        const val EXTRA_POSITION_MS = "extra_position_ms"
+        const val EXTRA_DURATION_MS = "extra_duration_ms"
     }
+
+    private lateinit var mediaSession: MediaSessionCompat
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private var currentTitle = "LieMusic"
     private var currentArtist = "Свободный стриминг"
+    private var currentCoverUrl = ""
+    private var currentBitmap: Bitmap? = null
     private var isPlaying = false
+    private var currentPositionMs = 0L
+    private var currentDurationMs = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        initMediaSession()
+    }
+
+    private fun initMediaSession() {
+        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val openAppPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        mediaSession = MediaSessionCompat(this, "LieMusicSession").apply {
+            setSessionActivity(openAppPendingIntent)
+            isActive = true
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay() {
+                    MainActivity.dispatchMediaAction("toggle")
+                }
+
+                override fun onPause() {
+                    MainActivity.dispatchMediaAction("toggle")
+                }
+
+                override fun onSkipToNext() {
+                    MainActivity.dispatchMediaAction("next")
+                }
+
+                override fun onSkipToPrevious() {
+                    MainActivity.dispatchMediaAction("prev")
+                }
+
+                override fun onSeekTo(pos: Long) {
+                    currentPositionMs = pos
+                    MainActivity.dispatchSeekAction(pos / 1000.0)
+                    updatePlaybackState()
+                }
+
+                override fun onStop() {
+                    MainActivity.dispatchMediaAction("toggle")
+                }
+            })
+        }
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Воспроизведение LieMusic",
+                "Воспроизведение музыки LieMusic",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Уведомление активного музыкального плеера"
+                description = "Элементы управления воспроизведением LieMusic"
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
@@ -59,9 +124,23 @@ class MediaPlaybackService : Service() {
 
         when (action) {
             ACTION_UPDATE -> {
-                currentTitle = intent.getStringExtra(EXTRA_TITLE) ?: currentTitle
-                currentArtist = intent.getStringExtra(EXTRA_ARTIST) ?: currentArtist
-                isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, true)
+                val newTitle = intent.getStringExtra(EXTRA_TITLE) ?: currentTitle
+                val newArtist = intent.getStringExtra(EXTRA_ARTIST) ?: currentArtist
+                val newCover = intent.getStringExtra(EXTRA_COVER_URL) ?: ""
+                val newIsPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, true)
+                val newPos = intent.getLongExtra(EXTRA_POSITION_MS, currentPositionMs)
+                val newDur = intent.getLongExtra(EXTRA_DURATION_MS, currentDurationMs)
+
+                currentTitle = newTitle
+                currentArtist = newArtist
+                isPlaying = newIsPlaying
+                currentPositionMs = newPos
+                currentDurationMs = newDur
+
+                if (newCover.isNotBlank() && newCover != currentCoverUrl) {
+                    loadCoverArt(newCover)
+                }
+
                 updateNotification()
             }
             ACTION_TOGGLE -> {
@@ -84,7 +163,83 @@ class MediaPlaybackService : Service() {
         return START_STICKY
     }
 
+    private fun loadCoverArt(url: String) {
+        currentCoverUrl = url
+        Thread {
+            try {
+                val connection = URL(url).openConnection() as HttpURLConnection
+                connection.doInput = true
+                connection.connectTimeout = 6000
+                connection.readTimeout = 6000
+                connection.connect()
+                val stream = connection.inputStream
+                val bitmap = BitmapFactory.decodeStream(stream)
+                stream.close()
+
+                if (bitmap != null) {
+                    val maxDim = 512
+                    val w = bitmap.width
+                    val h = bitmap.height
+                    val scaled = if (w > maxDim || h > maxDim) {
+                        val factor = maxDim.toFloat() / Math.max(w, h)
+                        Bitmap.createScaledBitmap(bitmap, (w * factor).toInt(), (h * factor).toInt(), true)
+                    } else {
+                        bitmap
+                    }
+                    currentBitmap = scaled
+                    mainHandler.post {
+                        updateNotification()
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore network art decode failure
+            }
+        }.start()
+    }
+
+    private fun updatePlaybackState() {
+        if (!::mediaSession.isInitialized) return
+
+        val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        val actions = PlaybackStateCompat.ACTION_PLAY or
+                PlaybackStateCompat.ACTION_PAUSE or
+                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                PlaybackStateCompat.ACTION_SEEK_TO or
+                PlaybackStateCompat.ACTION_STOP
+
+        val playbackState = PlaybackStateCompat.Builder()
+            .setActions(actions)
+            .setState(state, currentPositionMs, if (isPlaying) 1.0f else 0.0f)
+            .build()
+
+        mediaSession.setPlaybackState(playbackState)
+    }
+
+    private fun updateMetadata() {
+        if (!::mediaSession.isInitialized) return
+
+        val metadataBuilder = MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "LieMusic")
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDurationMs)
+
+        currentBitmap?.let {
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
+        }
+
+        mediaSession.setMetadata(metadataBuilder.build())
+    }
+
     private fun updateNotification() {
+        if (!::mediaSession.isInitialized) return
+
+        updatePlaybackState()
+        updateMetadata()
+
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -115,10 +270,12 @@ class MediaPlaybackService : Service() {
         } else {
             android.R.drawable.ic_media_play
         }
-
         val playPauseTitle = if (isPlaying) "Пауза" else "Играть"
 
+        // CRITICAL: Connecting MediaSession token to MediaStyle is what tells Android SystemUI
+        // to render the full native Android Quick Settings media carousel!
         val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()
+            .setMediaSession(mediaSession.sessionToken)
             .setShowActionsInCompactView(0, 1, 2)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -134,6 +291,10 @@ class MediaPlaybackService : Service() {
             .addAction(playPauseIcon, playPauseTitle, togglePending)
             .addAction(android.R.drawable.ic_media_next, "Следующий", nextPending)
 
+        currentBitmap?.let {
+            builder.setLargeIcon(it)
+        }
+
         val notification = builder.build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -145,5 +306,13 @@ class MediaPlaybackService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+    }
+
+    override fun onDestroy() {
+        if (::mediaSession.isInitialized) {
+            mediaSession.isActive = false
+            mediaSession.release()
+        }
+        super.onDestroy()
     }
 }

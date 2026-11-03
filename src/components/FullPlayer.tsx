@@ -8,7 +8,6 @@ import {
   Shuffle,
   Repeat,
   Heart,
-  Mic2,
   Sliders,
   Download,
   Check,
@@ -39,7 +38,6 @@ interface FullPlayerProps {
   onToggleShuffle: () => void;
   onToggleRepeat: () => void;
   onVolumeChange: (volume: number) => void;
-  onOpenLyrics: () => void;
   onOpenEqualizer: () => void;
   onDownloadTrack: () => void;
   onOpenLiePay: () => void;
@@ -66,7 +64,6 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   onToggleFavorite,
   onToggleShuffle,
   onToggleRepeat,
-  onOpenLyrics,
   onOpenEqualizer,
   onDownloadTrack,
   onOpenLiePay,
@@ -183,15 +180,6 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
-            {/* Synced Lyrics Button */}
-            <button
-              onClick={onOpenLyrics}
-              className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
-              title="Текст песни (Караоке)"
-            >
-              <Mic2 size={18} />
-            </button>
-
             {/* 10-band Equalizer Button */}
             <button
               onClick={onOpenEqualizer}

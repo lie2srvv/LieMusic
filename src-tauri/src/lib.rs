@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -25,10 +27,123 @@ pub struct LicenseResult {
     pub activated_at: Option<String>,
 }
 
+static OFFLINE_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
+
 fn get_app_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))
+}
+
+fn ensure_offline_server_started(app_dir: PathBuf) {
+    if OFFLINE_SERVER_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    tauri::async_runtime::spawn(async move {
+        let listener = match tokio::net::TcpListener::bind("127.0.0.1:28491").await {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("[OfflineServer] Error binding to 127.0.0.1:28491: {}", e);
+                return;
+            }
+        };
+
+        loop {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let dir = app_dir.clone();
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 2048];
+                    let n = match stream.read(&mut buf).await {
+                        Ok(n) if n > 0 => n,
+                        _ => return,
+                    };
+                    let req_str = String::from_utf8_lossy(&buf[..n]);
+                    let first_line = req_str.lines().next().unwrap_or("");
+                    let parts: Vec<&str> = first_line.split_whitespace().collect();
+                    if parts.len() < 2 || parts[0] != "GET" {
+                        return;
+                    }
+
+                    let path = parts[1];
+                    let track_id = path
+                        .trim_start_matches("/offline/")
+                        .trim_start_matches("/track/");
+                    let file_path = dir.join("downloads").join(format!("{}.audio", track_id));
+
+                    if !file_path.exists() {
+                        let not_found = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
+                        let _ = stream.write_all(not_found.as_bytes()).await;
+                        return;
+                    }
+
+                    let file_bytes = match fs::read(&file_path) {
+                        Ok(b) => b,
+                        Err(_) => return,
+                    };
+
+                    let total_len = file_bytes.len();
+                    let mime_type = if file_bytes.starts_with(b"ID3")
+                        || file_bytes.starts_with(&[0xFF, 0xFB])
+                        || file_bytes.starts_with(&[0xFF, 0xF3])
+                    {
+                        "audio/mpeg"
+                    } else {
+                        "audio/mp4"
+                    };
+
+                    // Range support
+                    let range_header = req_str
+                        .lines()
+                        .find(|l| l.to_lowercase().starts_with("range:"))
+                        .and_then(|l| l.split(':').nth(1))
+                        .map(|s| s.trim());
+
+                    if let Some(range_val) = range_header {
+                        if let Some(bytes_spec) = range_val.strip_prefix("bytes=") {
+                            let range_parts: Vec<&str> = bytes_spec.split('-').collect();
+                            let start: usize = range_parts
+                                .first()
+                                .and_then(|s| s.parse().ok())
+                                .unwrap_or(0);
+                            let end: usize = range_parts
+                                .get(1)
+                                .and_then(|s| s.parse().ok())
+                                .unwrap_or(total_len - 1);
+                            let end = end.min(total_len - 1);
+
+                            if start <= end && start < total_len {
+                                let chunk_len = end - start + 1;
+                                let header = format!(
+                                    "HTTP/1.1 206 Partial Content\r\n\
+                                     Content-Type: {}\r\n\
+                                     Content-Length: {}\r\n\
+                                     Content-Range: bytes {}-{}/{}\r\n\
+                                     Accept-Ranges: bytes\r\n\
+                                     Access-Control-Allow-Origin: *\r\n\r\n",
+                                    mime_type, chunk_len, start, end, total_len
+                                );
+                                let _ = stream.write_all(header.as_bytes()).await;
+                                let _ = stream.write_all(&file_bytes[start..=end]).await;
+                                return;
+                            }
+                        }
+                    }
+
+                    let header = format!(
+                        "HTTP/1.1 200 OK\r\n\
+                         Content-Type: {}\r\n\
+                         Content-Length: {}\r\n\
+                         Accept-Ranges: bytes\r\n\
+                         Access-Control-Allow-Origin: *\r\n\r\n",
+                        mime_type, total_len
+                    );
+                    let _ = stream.write_all(header.as_bytes()).await;
+                    let _ = stream.write_all(&file_bytes).await;
+                });
+            }
+        }
+    });
 }
 
 #[tauri::command]
@@ -150,52 +265,67 @@ fn verify_license_key(key: String, device_id: String) -> Result<LicenseResult, S
     })
 }
 
-fn extract_text_from_runs_or_simple(val: Option<&serde_json::Value>) -> String {
-    let Some(v) = val else { return String::new() };
-    if let Some(s) = v.get("simpleText").and_then(|s| s.as_str()) {
-        return s.trim().to_string();
-    }
-    if let Some(arr) = v.get("runs").and_then(|r| r.as_array()) {
-        let mut out = String::new();
-        for item in arr {
-            if let Some(t) = item.get("text").and_then(|t| t.as_str()) {
-                out.push_str(t);
-            }
-        }
-        return out.trim().to_string();
-    }
-    String::new()
-}
-
 fn extract_youtube_videos(val: &serde_json::Value, out: &mut Vec<SearchTrackResult>) {
     if let Some(obj) = val.as_object() {
-        let vr_opt = obj.get("videoRenderer").or_else(|| obj.get("compactVideoRenderer"));
-        if let Some(vr) = vr_opt {
-            let vid = vr.get("videoId").and_then(|v| v.as_str()).unwrap_or("");
-            let title = extract_text_from_runs_or_simple(vr.get("title"));
-            let mut artist = extract_text_from_runs_or_simple(vr.get("ownerText"));
-            if artist.is_empty() {
-                artist = extract_text_from_runs_or_simple(vr.get("shortBylineText"));
-            }
-            if artist.is_empty() {
-                artist = "YouTube Music".to_string();
-            }
+        let is_video = obj.contains_key("videoId")
+            && (obj.contains_key("title") || obj.contains_key("headline"));
 
-            let thumb = vr
+        if is_video {
+            let vid = obj
+                .get("videoId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let title = obj
+                .get("title")
+                .and_then(|t| {
+                    t.get("runs")
+                        .and_then(|r| r.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|item| item.get("text"))
+                        .and_then(|text| text.as_str())
+                        .or_else(|| t.get("simpleText").and_then(|s| s.as_str()))
+                })
+                .unwrap_or("")
+                .trim()
+                .to_string();
+
+            let artist = obj
+                .get("ownerText")
+                .or_else(|| obj.get("shortBylineText"))
+                .and_then(|b| {
+                    b.get("runs")
+                        .and_then(|r| r.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|item| item.get("text"))
+                        .and_then(|text| text.as_str())
+                })
+                .unwrap_or("YouTube Music")
+                .trim()
+                .to_string();
+
+            let thumb = obj
                 .get("thumbnail")
-                .and_then(|th| th.get("thumbnails"))
+                .and_then(|t| t.get("thumbnails"))
                 .and_then(|arr| arr.as_array())
                 .and_then(|arr| arr.last())
                 .and_then(|t| t.get("url"))
                 .and_then(|u| u.as_str())
                 .unwrap_or("https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500");
 
-            let dur_str = extract_text_from_runs_or_simple(vr.get("lengthText"));
-            let duration = if !dur_str.is_empty() {
-                let parts: Vec<&str> = dur_str.split(':').collect();
+            let duration_text = obj
+                .get("lengthText")
+                .and_then(|lt| lt.get("simpleText"))
+                .and_then(|s| s.as_str())
+                .unwrap_or("3:00");
+
+            let parts: Vec<&str> = duration_text.split(':').collect();
+            let duration = if parts.len() >= 2 {
                 match parts.len() {
                     2 => {
-                        parts[0].parse::<u64>().unwrap_or(3) * 60 + parts[1].parse::<u64>().unwrap_or(0)
+                        parts[0].parse::<u64>().unwrap_or(3) * 60
+                            + parts[1].parse::<u64>().unwrap_or(0)
                     }
                     3 => {
                         parts[0].parse::<u64>().unwrap_or(1) * 3600
@@ -322,9 +452,14 @@ async fn search_music_native(
                             .and_then(|d| d.as_u64())
                             .map(|ms| ms / 1000)
                             .unwrap_or(180);
-                        let thumbnail = item.get("artwork_url")
+                        let thumbnail = item
+                            .get("artwork_url")
                             .and_then(|a| a.as_str())
-                            .or_else(|| item.get("user").and_then(|u| u.get("avatar_url")).and_then(|a| a.as_str()))
+                            .or_else(|| {
+                                item.get("user")
+                                    .and_then(|u| u.get("avatar_url"))
+                                    .and_then(|a| a.as_str())
+                            })
                             .unwrap_or("https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500")
                             .to_string();
 
@@ -338,7 +473,10 @@ async fn search_music_native(
                             .map(|u| format!("sc_transcoding:{}", u));
 
                         let track_id = id.clone();
-                        if !id.is_empty() && !title.is_empty() && !results.iter().any(|t| t.id == track_id) {
+                        if !id.is_empty()
+                            && !title.is_empty()
+                            && !results.iter().any(|t| t.id == track_id)
+                        {
                             results.push(SearchTrackResult {
                                 id,
                                 title,
@@ -391,7 +529,7 @@ async fn resolve_stream_url_native(
     // 2. If YouTube track
     if source == "youtube" || track_id.starts_with("yt_") {
         let video_id = track_id.replace("yt_", "");
-        
+
         let invidious_hosts = [
             "https://yt.chocolatemoo53.com",
             "https://invidious.nerdvpn.de",
@@ -434,45 +572,86 @@ async fn download_track_file(
         let _ = fs::create_dir_all(&dl_dir);
     }
 
-    // First resolve the real direct streaming URL
+    // First resolve the real streaming URL
     let resolved_url = resolve_stream_url_native(track_id.clone(), stream_url, source).await?;
 
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(45))
         .build()
         .map_err(|e| e.to_string())?;
 
-    let res = client.get(&resolved_url).send().await.map_err(|e| format!("Download stream failed: {}", e))?;
-    let bytes = res.bytes().await.map_err(|e| format!("Failed to read stream bytes: {}", e))?;
+    let res = client
+        .get(&resolved_url)
+        .send()
+        .await
+        .map_err(|e| format!("Download stream failed: {}", e))?;
+
+    let body_bytes = res
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read stream bytes: {}", e))?;
+
+    let mut full_audio_bytes = Vec::new();
+
+    // Check if this is an HLS playlist (SoundCloud m3u8)
+    if body_bytes.starts_with(b"#EXTM3U") {
+        let text = String::from_utf8_lossy(&body_bytes);
+        // Extract init mp4 segment
+        if let Some(init_start) = text.find("#EXT-X-MAP:URI=\"") {
+            let rest = &text[init_start + 16..];
+            if let Some(init_end) = rest.find('\"') {
+                let init_url = &rest[..init_end];
+                if let Ok(init_res) = client.get(init_url).send().await {
+                    if let Ok(init_b) = init_res.bytes().await {
+                        full_audio_bytes.extend_from_slice(&init_b);
+                    }
+                }
+            }
+        }
+
+        // Extract and download each audio chunk (.m4s)
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("http") {
+                if let Ok(seg_res) = client.get(trimmed).send().await {
+                    if let Ok(seg_b) = seg_res.bytes().await {
+                        full_audio_bytes.extend_from_slice(&seg_b);
+                    }
+                }
+            }
+        }
+    } else {
+        full_audio_bytes = body_bytes.to_vec();
+    }
+
+    if full_audio_bytes.is_empty() {
+        return Err("Downloaded audio content was empty".into());
+    }
 
     let file_path = dl_dir.join(format!("{}.audio", track_id));
-    fs::write(&file_path, &bytes).map_err(|e| format!("Failed to write track file: {}", e))?;
+    fs::write(&file_path, &full_audio_bytes)
+        .map_err(|e| format!("Failed to write track file: {}", e))?;
 
-    let size_mb = (bytes.len() as f64) / (1024.0 * 1024.0);
+    ensure_offline_server_started(dir);
+
+    let size_mb = (full_audio_bytes.len() as f64) / (1024.0 * 1024.0);
     Ok(format!("{:.1} МБ", size_mb))
 }
 
 #[tauri::command]
-fn get_downloaded_track_audio(
-    app: tauri::AppHandle,
-    track_id: String,
-) -> Result<String, String> {
+fn get_downloaded_track_audio(app: tauri::AppHandle, track_id: String) -> Result<String, String> {
     let dir = get_app_dir(&app)?;
     let file_path = dir.join("downloads").join(format!("{}.audio", track_id));
     if !file_path.exists() {
         return Err("Track not found in local offline storage".into());
     }
-    let bytes = fs::read(&file_path).map_err(|e| e.to_string())?;
-    let base64_str = base64_encode(&bytes);
-    Ok(format!("data:audio/mp4;base64,{}", base64_str))
+    ensure_offline_server_started(dir);
+    Ok(format!("http://127.0.0.1:28491/offline/{}", track_id))
 }
 
 #[tauri::command]
-fn delete_downloaded_track_file(
-    app: tauri::AppHandle,
-    track_id: String,
-) -> Result<(), String> {
+fn delete_downloaded_track_file(app: tauri::AppHandle, track_id: String) -> Result<(), String> {
     let dir = get_app_dir(&app)?;
     let file_path = dir.join("downloads").join(format!("{}.audio", track_id));
     if file_path.exists() {
@@ -481,33 +660,15 @@ fn delete_downloaded_track_file(
     Ok(())
 }
 
-fn base64_encode(data: &[u8]) -> String {
-    const CHARSET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
-        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
-        let triple = (b0 << 16) | (b1 << 8) | b2;
-        out.push(CHARSET[((triple >> 18) & 0x3F) as usize] as char);
-        out.push(CHARSET[((triple >> 12) & 0x3F) as usize] as char);
-        if chunk.len() > 1 {
-            out.push(CHARSET[((triple >> 6) & 0x3F) as usize] as char);
-        } else {
-            out.push('=');
-        }
-        if chunk.len() > 2 {
-            out.push(CHARSET[(triple & 0x3F) as usize] as char);
-        } else {
-            out.push('=');
-        }
-    }
-    out
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            if let Ok(dir) = app.path().app_data_dir() {
+                ensure_offline_server_started(dir);
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_log::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             get_device_id,

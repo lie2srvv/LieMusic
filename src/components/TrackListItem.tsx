@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Heart, Download, Music2, Trash2 } from 'lucide-react';
+import { Play, Heart, Download, Trash2 } from 'lucide-react';
 import { Track } from '../types';
 
 interface TrackListItemProps {
@@ -7,6 +7,8 @@ interface TrackListItemProps {
   isCurrent: boolean;
   isPlaying: boolean;
   isFavorite: boolean;
+  isDownloaded?: boolean;
+  fileSize?: string;
   accentColor: string;
   onPlay: () => void;
   onToggleFavorite: () => void;
@@ -19,12 +21,17 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
   isCurrent,
   isPlaying,
   isFavorite,
+  isDownloaded,
+  fileSize,
   accentColor,
   onPlay,
   onToggleFavorite,
   onDownload,
   onDeleteDownload,
 }) => {
+  const isTrackDownloaded = isDownloaded ?? track.isDownloaded;
+  const trackFileSize = fileSize ?? track.fileSize;
+
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
@@ -48,15 +55,17 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
               src={track.thumbnail}
               alt={track.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              loading="lazy"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-neutral-500">
-              <Music2 size={20} />
+            <div className="w-full h-full flex items-center justify-center text-neutral-600 bg-neutral-900">
+              <span className="text-lg">🎵</span>
             </div>
           )}
 
+          {/* Current track playing indicator overlay */}
           {isCurrent && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center">
               {isPlaying ? (
                 <div className="flex items-end space-x-0.5 h-3">
                   <span className="w-0.5 h-full bg-white animate-bounce" />
@@ -100,9 +109,9 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
               {track.source === 'youtube' ? 'YT' : track.source === 'soundcloud' ? 'SC' : 'Local'}
             </span>
             <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
-            {track.fileSize && (
+            {trackFileSize && (
               <span className="text-[10px] text-emerald-400 font-mono bg-emerald-400/10 px-1 rounded">
-                {track.fileSize}
+                {trackFileSize}
               </span>
             )}
           </div>
@@ -133,9 +142,9 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           <button
             onClick={onDownload}
             className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
-              track.isDownloaded ? 'text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
+              isTrackDownloaded ? 'text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
             }`}
-            title={track.isDownloaded ? 'Скачано на устройство' : 'Скачать'}
+            title={isTrackDownloaded ? 'Скачано на устройство' : 'Скачать'}
           >
             <Download size={16} />
           </button>

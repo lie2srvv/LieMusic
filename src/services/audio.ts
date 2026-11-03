@@ -27,12 +27,13 @@ class AudioEngine {
   private onTrackEndCallbacks: AudioCallback[] = [];
   private onTimeUpdateCallbacks: TimeCallback[] = [];
   private onPlayStateChangeCallbacks: ((isPlaying: boolean) => void)[] = [];
+  private onNextCallback: (() => void) | null = null;
+  private onPrevCallback: (() => void) | null = null;
 
   private isInitialized = false;
 
   constructor() {
     this.audio = new Audio();
-    this.audio.crossOrigin = 'anonymous';
     this.audio.preload = 'auto';
 
     this.audio.addEventListener('ended', () => {
@@ -47,14 +48,42 @@ class AudioEngine {
     this.audio.addEventListener('play', () => {
       this.onPlayStateChangeCallbacks.forEach((cb) => cb(true));
       this.updateMediaSession();
+      this.syncAndroidNotification(true);
     });
 
     this.audio.addEventListener('pause', () => {
       this.onPlayStateChangeCallbacks.forEach((cb) => cb(false));
       this.updateMediaSession();
+      this.syncAndroidNotification(false);
     });
 
     this.setupMediaSessionHandlers();
+    this.setupAndroidMediaActionListener();
+  }
+
+  private setupAndroidMediaActionListener() {
+    if (typeof window === 'undefined') return;
+    window.addEventListener('android_media_action', (event: any) => {
+      const action = event.detail;
+      if (action === 'toggle') {
+        this.togglePlayPause();
+      } else if (action === 'next') {
+        if (this.onNextCallback) this.onNextCallback();
+      } else if (action === 'prev') {
+        if (this.onPrevCallback) this.onPrevCallback();
+      }
+    });
+  }
+
+  private syncAndroidNotification(isPlaying: boolean) {
+    try {
+      const bridge = (window as any).AndroidMediaNotification;
+      if (bridge && this.currentTrack) {
+        bridge.updateState(this.currentTrack.title, this.currentTrack.artist, isPlaying);
+      }
+    } catch (e) {
+      console.warn('[LieMusic] Android notification bridge sync error:', e);
+    }
   }
 
   private initAudioNodes() {
@@ -110,13 +139,23 @@ class AudioEngine {
   }
 
   public async playTrack(track: Track, streamUrl: string) {
+    this.currentTrack = track;
+
+    // For local loopback or data URLs, do NOT use crossOrigin='anonymous'
+    if (streamUrl.includes('127.0.0.1') || streamUrl.startsWith('data:') || streamUrl.startsWith('blob:')) {
+      this.audio.removeAttribute('crossorigin');
+    } else {
+      this.audio.crossOrigin = 'anonymous';
+    }
+
     this.initAudioNodes();
 
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      await this.audioCtx.resume();
+      try {
+        await this.audioCtx.resume();
+      } catch {}
     }
 
-    this.currentTrack = track;
     this.audio.src = streamUrl;
     this.audio.load();
 
@@ -127,22 +166,26 @@ class AudioEngine {
     }
 
     this.updateMediaSession();
+    this.syncAndroidNotification(true);
   }
 
   public togglePlayPause() {
     if (this.audio.paused) {
       this.initAudioNodes();
       if (this.audioCtx && this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
+        this.audioCtx.resume().catch(console.error);
       }
       this.audio.play().catch(console.error);
+      this.syncAndroidNotification(true);
     } else {
       this.audio.pause();
+      this.syncAndroidNotification(false);
     }
   }
 
   public pause() {
     this.audio.pause();
+    this.syncAndroidNotification(false);
   }
 
   public seek(seconds: number) {
@@ -182,7 +225,6 @@ class AudioEngine {
   public setBassBoost(level: number) {
     this.initAudioNodes();
     if (this.bassNode) {
-      // level: 0 to 100 -> 0dB to 12dB
       const gain = (Math.max(0, Math.min(100, level)) / 100) * 12;
       this.bassNode.gain.value = gain;
     }
@@ -208,16 +250,18 @@ class AudioEngine {
   private updateMediaSession() {
     if (!('mediaSession' in navigator) || !this.currentTrack) return;
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: this.currentTrack.title,
-      artist: this.currentTrack.artist,
-      album: this.currentTrack.album || 'LieMusic',
-      artwork: [
-        { src: this.currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' },
-      ],
-    });
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: this.currentTrack.title,
+        artist: this.currentTrack.artist,
+        album: this.currentTrack.album || 'LieMusic',
+        artwork: [
+          { src: this.currentTrack.thumbnail, sizes: '512x512', type: 'image/jpeg' },
+        ],
+      });
 
-    navigator.mediaSession.playbackState = this.audio.paused ? 'paused' : 'playing';
+      navigator.mediaSession.playbackState = this.audio.paused ? 'paused' : 'playing';
+    } catch {}
   }
 
   private setupMediaSessionHandlers() {
@@ -237,29 +281,43 @@ class AudioEngine {
   }
 
   public setActionHandlers(handlers: { onNext?: () => void; onPrev?: () => void }) {
-    if (!('mediaSession' in navigator)) return;
     if (handlers.onNext) {
-      try {
-        navigator.mediaSession.setActionHandler('nexttrack', handlers.onNext);
-      } catch {}
+      this.onNextCallback = handlers.onNext;
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.setActionHandler('nexttrack', handlers.onNext);
+        } catch {}
+      }
     }
     if (handlers.onPrev) {
-      try {
-        navigator.mediaSession.setActionHandler('previoustrack', handlers.onPrev);
-      } catch {}
+      this.onPrevCallback = handlers.onPrev;
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.setActionHandler('previoustrack', handlers.onPrev);
+        } catch {}
+      }
     }
   }
 
   public onTrackEnd(cb: AudioCallback) {
     this.onTrackEndCallbacks.push(cb);
+    return () => {
+      this.onTrackEndCallbacks = this.onTrackEndCallbacks.filter((c) => c !== cb);
+    };
   }
 
   public onTimeUpdate(cb: TimeCallback) {
     this.onTimeUpdateCallbacks.push(cb);
+    return () => {
+      this.onTimeUpdateCallbacks = this.onTimeUpdateCallbacks.filter((c) => c !== cb);
+    };
   }
 
   public onPlayStateChange(cb: (isPlaying: boolean) => void) {
     this.onPlayStateChangeCallbacks.push(cb);
+    return () => {
+      this.onPlayStateChangeCallbacks = this.onPlayStateChangeCallbacks.filter((c) => c !== cb);
+    };
   }
 }
 

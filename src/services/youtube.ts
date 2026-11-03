@@ -71,7 +71,6 @@ export async function searchYouTubeTracks(query: string): Promise<Track[]> {
 
   const cleanQuery = query.trim();
 
-  // Try Native Rust search first
   try {
     const raw = await invoke<any[]>('search_music_native', {
       query: cleanQuery,
@@ -103,26 +102,24 @@ export async function searchYouTubeTracks(query: string): Promise<Track[]> {
 }
 
 export async function resolveStreamUrl(track: Track): Promise<string> {
-  // If track is downloaded, read local offline audio!
-  if (track.isDownloaded) {
-    try {
-      const offlineAudio = await invoke<string>('get_downloaded_track_audio', {
-        trackId: track.id,
-      });
-      if (offlineAudio && offlineAudio.length > 0) {
-        return offlineAudio;
-      }
-    } catch (e) {
-      console.warn('[LieMusic] Error fetching offline audio:', e);
+  // 1. Check local offline storage FIRST
+  try {
+    const offlineAudio = await invoke<string>('get_downloaded_track_audio', {
+      trackId: track.id,
+    });
+    if (offlineAudio && offlineAudio.length > 0) {
+      return offlineAudio;
     }
+  } catch {
+    // Not downloaded locally, continue to online stream
   }
 
-  // If track already has direct playable mp3
+  // 2. Direct playable mp3
   if (track.streamUrl && !track.streamUrl.startsWith('sc_transcoding:') && !track.streamUrl.startsWith('yt_')) {
     return track.streamUrl;
   }
 
-  // Call native stream resolver
+  // 3. Native stream resolver (YouTube / SoundCloud)
   try {
     const stream = await invoke<string>('resolve_stream_url_native', {
       trackId: track.id,

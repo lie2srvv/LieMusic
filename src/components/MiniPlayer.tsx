@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipForward, Disc3 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Disc3 } from 'lucide-react';
 import { Track } from '../types';
 
 interface MiniPlayerProps {
@@ -10,6 +10,7 @@ interface MiniPlayerProps {
   accentColor: string;
   glowColor: string;
   onTogglePlay: () => void;
+  onPrev: () => void;
   onNext: () => void;
   onOpenFullPlayer: () => void;
 }
@@ -22,6 +23,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   accentColor,
   glowColor,
   onTogglePlay,
+  onPrev,
   onNext,
   onOpenFullPlayer,
 }) => {
@@ -50,7 +52,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         </div>
 
         {/* Track Info */}
-        <div className="flex items-center space-x-3 overflow-hidden flex-1 mr-2">
+        <div className="flex items-center space-x-3 overflow-hidden flex-1 mr-2 min-w-0">
           <div className="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 bg-neutral-800 shadow-md">
             {currentTrack.thumbnail ? (
               <img
@@ -70,7 +72,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
             )}
           </div>
 
-          <div className="overflow-hidden flex-1">
+          <div className="overflow-hidden flex-1 min-w-0">
             <h4 className="text-sm font-semibold text-white truncate tracking-tight">
               {currentTrack.title}
             </h4>
@@ -81,23 +83,31 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         </div>
 
         {/* Controls */}
-        <div className="flex items-center space-x-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center space-x-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={onPrev}
+            className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-neutral-400 hover:text-white transition-transform active:scale-90 cursor-pointer"
+            title="Предыдущий трек"
+          >
+            <SkipBack size={18} />
+          </button>
+
           <button
             onClick={onTogglePlay}
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
+            className="w-10 h-10 rounded-full shrink-0 aspect-square flex items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-md"
             style={{ backgroundColor: accentColor, color: '#151313' }}
             title={isPlaying ? 'Пауза' : 'Играть'}
           >
             {isPlaying ? (
               <Pause size={18} fill="#151313" />
             ) : (
-              <Play size={18} fill="#151313" className="translate-x-0.5" />
+              <Play size={17} fill="#151313" className="ml-0.5" />
             )}
           </button>
 
           <button
             onClick={onNext}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-300 hover:text-white transition-transform active:scale-90 cursor-pointer"
+            className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-neutral-400 hover:text-white transition-transform active:scale-90 cursor-pointer"
             title="Следующий трек"
           >
             <SkipForward size={18} />

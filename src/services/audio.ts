@@ -164,8 +164,8 @@ class AudioEngine {
       await this.audioCtx.resume().catch(console.error);
     }
 
-    // Only use anonymous CORS when streaming from remote CDN, NOT from local loopback or data URLs!
-    if (streamUrl.startsWith('http://127.0.0.1') || streamUrl.startsWith('http://localhost') || streamUrl.startsWith('data:')) {
+    // Set anonymous CORS so Web Audio API MediaElementSource does NOT silence the audio!
+    if (streamUrl.startsWith('data:')) {
       this.audio.removeAttribute('crossorigin');
     } else {
       this.audio.crossOrigin = 'anonymous';
@@ -182,6 +182,20 @@ class AudioEngine {
 
     this.updateMediaSession();
     this.syncAndroidNotification(true);
+  }
+
+  /**
+   * Instantly stops playback and detaches the previous audio source.
+   * Prevents previous track from playing while a new track stream is resolving.
+   */
+  public stop() {
+    this.audio.pause();
+    this.audio.currentTime = 0;
+    this.audio.removeAttribute('src');
+    this.audio.load();
+    this.onPlayStateChangeCallbacks.forEach((cb) => cb(false));
+    this.onTimeUpdateCallbacks.forEach((cb) => cb(0, 0));
+    this.syncAndroidNotification(false);
   }
 
   public togglePlayPause() {

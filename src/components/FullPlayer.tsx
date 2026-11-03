@@ -12,6 +12,7 @@ import {
   Download,
   Check,
   Disc3,
+  Loader2,
 } from 'lucide-react';
 import { Track } from '../types';
 
@@ -25,6 +26,7 @@ interface FullPlayerProps {
   isFavorite: boolean;
   isShuffle: boolean;
   isRepeat: boolean;
+  isDownloading?: boolean;
   volume: number;
   visualizerData: Uint8Array;
   accentColor: string;
@@ -51,6 +53,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   isFavorite,
   isShuffle,
   isRepeat,
+  isDownloading,
   visualizerData,
   accentColor,
   glowColor,
@@ -68,45 +71,48 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
 
   const formatTime = (seconds: number) => {
     if (isNaN(seconds) || seconds < 0) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#121111] animate-in slide-in-from-bottom duration-300 select-none overflow-hidden safe-area-pt safe-area-pb">
+    <div className="fixed inset-0 z-50 bg-[#121111] flex flex-col justify-between overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-300">
+      {/* Dynamic Ambient Background Glow */}
       <div
-        className="absolute inset-0 pointer-events-none opacity-25 blur-3xl transition-all duration-700 -z-10"
-        style={{
-          background: `radial-gradient(circle at 50% 30%, ${glowColor}, transparent 70%)`,
-        }}
+        className="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full blur-[120px] pointer-events-none opacity-40 transition-all duration-700"
+        style={{ backgroundColor: glowColor }}
       />
 
-      {/* Top Header */}
-      <div className="flex items-center justify-between px-6 pt-3 pb-2 shrink-0">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-12 pb-4 z-10 shrink-0">
         <button
           onClick={onClose}
-          className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-300 hover:text-white transition-colors active:scale-95 cursor-pointer"
+          className="w-10 h-10 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
         >
           <ChevronDown size={22} />
         </button>
 
         <div className="text-center">
-          <p className="text-[10px] tracking-wider uppercase font-bold text-neutral-400">
-            Сейчас играет
+          <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+            СЕЙЧАС ИГРАЕТ
           </p>
-          <p className="text-xs font-semibold text-white capitalize">
-            {track.source === 'youtube' ? 'YouTube Music' : track.source}
+          <p className="text-xs font-semibold text-neutral-200 mt-0.5">
+            {track.album || (track.source === 'youtube' ? 'YouTube Music' : 'SoundCloud')}
           </p>
         </div>
 
         <button
           onClick={onToggleFavorite}
-          className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
+          className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all active:scale-90 cursor-pointer ${
+            isFavorite
+              ? 'bg-rose-500/20 text-rose-500 border-rose-500/30'
+              : 'bg-white/5 border-white/5 text-neutral-300 hover:text-white'
+          }`}
         >
           <Heart
-            size={20}
-            className={isFavorite ? 'text-rose-500 fill-rose-500' : 'text-neutral-400'}
+            size={18}
+            fill={isFavorite ? 'currentColor' : 'none'}
           />
         </button>
       </div>
@@ -184,14 +190,23 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
 
             <button
               onClick={onDownloadTrack}
+              disabled={isDownloading}
               className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-all active:scale-90 cursor-pointer ${
-                track.isDownloaded
+                isDownloading
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                  : track.isDownloaded
                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                   : 'bg-white/5 hover:bg-white/10 border-white/5 text-neutral-300 hover:text-white'
               }`}
-              title={track.isDownloaded ? 'Скачано офлайн' : 'Скачать трек'}
+              title={isDownloading ? 'Скачивание трека...' : track.isDownloaded ? 'Скачано офлайн' : 'Скачать трек'}
             >
-              {track.isDownloaded ? <Check size={18} /> : <Download size={18} />}
+              {isDownloading ? (
+                <Loader2 size={18} className="animate-spin text-amber-400" />
+              ) : track.isDownloaded ? (
+                <Check size={18} />
+              ) : (
+                <Download size={18} />
+              )}
             </button>
           </div>
         </div>
@@ -219,88 +234,62 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             onClick={onToggleShuffle}
             className={`relative p-2.5 rounded-full transition-all active:scale-90 cursor-pointer flex flex-col items-center justify-center ${
               isShuffle
-                ? 'bg-white/15 text-white shadow-lg'
+                ? 'text-white bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/50'
                 : 'text-neutral-500 hover:text-neutral-300'
             }`}
-            style={
-              isShuffle
-                ? {
-                    color: '#FFFFFF',
-                    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-                    boxShadow: '0 0 18px rgba(255, 255, 255, 0.8), 0 0 8px #FFFFFF',
-                    border: '1.5px solid rgba(255, 255, 255, 0.9)',
-                  }
-                : undefined
-            }
-            title={isShuffle ? 'Перемешивание включено' : 'Перемешать'}
+            title="Перемешать"
           >
             <Shuffle size={20} className={isShuffle ? 'stroke-[2.5]' : ''} />
             {isShuffle && (
-              <span
-                className="absolute -bottom-1 w-1.5 h-1.5 rounded-full shadow-sm"
-                style={{ backgroundColor: accentColor || '#FFFFFF' }}
-              />
+              <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#fff]" />
             )}
           </button>
 
           <button
             onClick={onPrev}
-            className="p-2.5 rounded-full text-neutral-200 hover:text-white active:scale-90 transition-transform cursor-pointer"
-            title="Предыдущий трек"
+            className="p-3 text-neutral-200 hover:text-white transition-transform active:scale-90 cursor-pointer"
+            title="Предыдущий"
           >
-            <SkipBack size={26} />
+            <SkipBack size={28} />
           </button>
 
           <button
             onClick={onTogglePlay}
-            className="w-16 h-16 rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-transform cursor-pointer"
+            className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-transform active:scale-90 cursor-pointer"
             style={{
               backgroundColor: '#FFFFFF',
               color: '#151313',
-              boxShadow: `0 10px 25px -5px ${glowColor}`,
+              boxShadow: `0 8px 30px -4px ${glowColor}`,
             }}
             title={isPlaying ? 'Пауза' : 'Играть'}
           >
             {isPlaying ? (
-              <Pause size={28} fill="currentColor" />
+              <Pause size={28} fill="#151313" />
             ) : (
-              <Play size={28} fill="currentColor" className="translate-x-0.5" />
+              <Play size={28} fill="#151313" className="translate-x-0.5" />
             )}
           </button>
 
           <button
             onClick={onNext}
-            className="p-2.5 rounded-full text-neutral-200 hover:text-white active:scale-90 transition-transform cursor-pointer"
-            title="Следующий трек"
+            className="p-3 text-neutral-200 hover:text-white transition-transform active:scale-90 cursor-pointer"
+            title="Следующий"
           >
-            <SkipForward size={26} />
+            <SkipForward size={28} />
           </button>
 
           <button
             onClick={onToggleRepeat}
             className={`relative p-2.5 rounded-full transition-all active:scale-90 cursor-pointer flex flex-col items-center justify-center ${
               isRepeat
-                ? 'bg-white/15 text-white shadow-lg'
+                ? 'text-white bg-white/20 shadow-[0_0_15px_rgba(255,255,255,0.4)] ring-1 ring-white/50'
                 : 'text-neutral-500 hover:text-neutral-300'
             }`}
-            style={
-              isRepeat
-                ? {
-                    color: '#FFFFFF',
-                    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-                    boxShadow: '0 0 18px rgba(255, 255, 255, 0.8), 0 0 8px #FFFFFF',
-                    border: '1.5px solid rgba(255, 255, 255, 0.9)',
-                  }
-                : undefined
-            }
-            title={isRepeat ? 'Повтор включен' : 'Повтор трека'}
+            title="Повтор трека"
           >
             <Repeat size={20} className={isRepeat ? 'stroke-[2.5]' : ''} />
             {isRepeat && (
-              <span
-                className="absolute -bottom-1 w-1.5 h-1.5 rounded-full shadow-sm"
-                style={{ backgroundColor: accentColor || '#FFFFFF' }}
-              />
+              <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#fff]" />
             )}
           </button>
         </div>

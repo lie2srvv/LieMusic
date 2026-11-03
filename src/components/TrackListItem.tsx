@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Play, Heart, Download, Trash2, Check } from 'lucide-react';
+import { Play, Heart, Download, Trash2, Check, Loader2 } from 'lucide-react';
 import { Track } from '../types';
 
 interface TrackListItemProps {
@@ -8,6 +8,7 @@ interface TrackListItemProps {
   isPlaying: boolean;
   isFavorite: boolean;
   isDownloaded?: boolean;
+  isDownloading?: boolean;
   fileSize?: string;
   accentColor: string;
   isSelectMode?: boolean;
@@ -26,6 +27,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
   isPlaying,
   isFavorite,
   isDownloaded,
+  isDownloading,
   fileSize,
   accentColor,
   isSelectMode = false,
@@ -160,10 +162,12 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
               className={`text-[9px] uppercase font-bold px-1 rounded ${
                 track.source === 'youtube'
                   ? 'bg-red-500/20 text-red-400'
+                  : track.source === 'local'
+                  ? 'bg-emerald-500/20 text-emerald-400'
                   : 'bg-orange-500/20 text-orange-400'
               }`}
             >
-              {track.source === 'youtube' ? 'YT' : 'SC'}
+              {track.source === 'youtube' ? 'YT' : track.source === 'local' ? 'LOCAL' : 'SC'}
             </span>
             <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
             {isTrackDownloaded && trackFileSize && (
@@ -177,7 +181,14 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
 
       {/* Right: Actions and Duration */}
       {!isSelectMode && (
-        <div className="flex items-center space-x-1.5 shrink-0" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onMouseUp={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}>
+        <div
+          className="flex items-center space-x-1.5 shrink-0"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
           <button
             onClick={onToggleFavorite}
             className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
@@ -188,7 +199,14 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
             <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
           </button>
 
-          {onDeleteDownload ? (
+          {isDownloading ? (
+            <div
+              className="p-2 rounded-xl text-amber-400 flex items-center justify-center animate-pulse"
+              title="Скачивание..."
+            >
+              <Loader2 size={16} className="animate-spin text-amber-400" />
+            </div>
+          ) : onDeleteDownload ? (
             <button
               onClick={onDeleteDownload}
               className="p-2 rounded-xl text-neutral-500 hover:text-rose-400 active:scale-90 transition-all cursor-pointer"

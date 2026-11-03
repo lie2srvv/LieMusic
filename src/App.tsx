@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Search,
   DownloadCloud,
@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  FolderPlus,
 } from 'lucide-react';
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { CellularDownloadModal } from './components/CellularDownloadModal';
@@ -54,6 +55,8 @@ export const App: React.FC = () => {
   const [history, setHistory] = useState<Track[]>([]);
   const [downloadedTracks, setDownloadedTracks] = useState<Track[]>([]);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const downloadedTrackIds = useMemo(
     () => new Set(downloadedTracks.map((t) => t.id)),
@@ -128,6 +131,12 @@ export const App: React.FC = () => {
 
   const handlePlayTrack = useCallback(
     async (track: Track, newQueue?: Track[]) => {
+      // Instantly stop previous playing track
+      audioEngine.stop();
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(track.duration || 0);
+
       if (newQueue) {
         setQueue(newQueue);
       } else if (!queue.some((t) => t.id === track.id)) {
@@ -337,6 +346,70 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleImportLocalFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const bytes = Array.from(new Uint8Array(arrayBuffer));
+
+        const rawName = file.name.replace(/\.[^/.]+$/, '');
+        let title = rawName;
+        let artist = 'Локальный файл';
+
+        if (rawName.includes(' - ')) {
+          const parts = rawName.split(' - ');
+          artist = parts[0].trim();
+          title = parts.slice(1).join(' - ').trim();
+        }
+
+        const trackId = `local_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+        const sizeStr = await invoke<string>('save_local_track_file', {
+          trackId,
+          fileBytes: bytes,
+        });
+
+        let duration = 180;
+        try {
+          const tempAudio = new Audio(URL.createObjectURL(file));
+          await new Promise<void>((resolve) => {
+            tempAudio.addEventListener('loadedmetadata', () => {
+              if (!isNaN(tempAudio.duration) && tempAudio.duration > 0) {
+                duration = Math.round(tempAudio.duration);
+              }
+              resolve();
+            });
+            setTimeout(resolve, 600);
+          });
+        } catch {
+          // Fallback duration
+        }
+
+        const localTrack: Track = {
+          id: trackId,
+          title,
+          artist,
+          album: 'Локальные треки',
+          duration,
+          thumbnail: '',
+          source: 'local',
+          isDownloaded: true,
+          fileSize: sizeStr || `${(file.size / (1024 * 1024)).toFixed(1)} МБ`,
+        };
+
+        setDownloadedTracks((prev) => [localTrack, ...prev.filter((t) => t.id !== localTrack.id)]);
+      } catch (err) {
+        console.error('[LieMusic] Error importing local file:', err);
+      }
+    }
+
+    e.target.value = '';
+  };
+
   const handleSearch = async (query: string, sourceOverride?: AudioSource | 'all') => {
     setSearchQuery(query);
     const activeSource = sourceOverride || searchSource;
@@ -384,6 +457,16 @@ export const App: React.FC = () => {
         backgroundImage: `radial-gradient(circle at 50% 0%, ${palette.glow} 0%, transparent 55%)`,
       }}
     >
+      {/* Hidden local audio file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/*"
+        multiple
+        onChange={handleImportLocalFiles}
+        className="hidden"
+      />
+
       {/* Top Header Bar */}
       <header className="flex items-center justify-between px-5 pt-8 pb-3 bg-[#151313]/90 backdrop-blur-md border-b border-white/5 safe-area-pt shrink-0 z-20">
         <div className="flex items-center space-x-3">
@@ -508,6 +591,7 @@ export const App: React.FC = () => {
                         isPlaying={isPlaying}
                         isFavorite={favoriteTrackIds.has(track.id)}
                         isDownloaded={downloadedTrackIds.has(track.id)}
+                        isDownloading={downloadingIds.has(track.id)}
                         fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
                         accentColor={palette.accent}
                         onPlay={() => handlePlayTrack(track, history)}
@@ -526,11 +610,8 @@ export const App: React.FC = () => {
                     )}
                   </>
                 ) : (
-                  <div className="py-8 text-center text-neutral-500 space-y-1">
-                    <p className="text-xs">Вы пока ничего не слушали</p>
-                    <p className="text-[11px] text-neutral-600">
-                      Воспользуйтесь поиском, чтобы найти любимую музыку
-                    </p>
+                  <div className="py-8 text-center text-neutral-500">
+                    <p className="text-xs">Вы еще не слушали треки</p>
                   </div>
                 )}
               </div>
@@ -542,30 +623,19 @@ export const App: React.FC = () => {
         {activeTab === 'search' && (
           <div className="max-w-xl mx-auto space-y-4">
             <div className="relative">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
                 placeholder="Поиск треков, артистов..."
+                className="w-full bg-[#1D1B1B] border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all shadow-inner"
                 autoFocus
-                className="w-full pl-11 pr-4 py-3 bg-[#1D1B1B] text-white rounded-2xl border border-white/10 focus:border-white/30 focus:outline-none transition-all placeholder:text-neutral-500 text-sm shadow-xl"
               />
-              <Search
-                size={18}
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => handleSearch('')}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-neutral-500 hover:text-white"
-                >
-                  Очистить
-                </button>
-              )}
             </div>
 
-            {/* Source Filter Switcher */}
-            <div className="flex space-x-2">
+            {/* Source Switcher Pills */}
+            <div className="flex items-center space-x-2">
               {[
                 { id: 'all', label: 'Все источники' },
                 { id: 'youtube', label: 'YouTube Music' },
@@ -574,9 +644,8 @@ export const App: React.FC = () => {
                 <button
                   key={s.id}
                   onClick={() => {
-                    const nextSource = s.id as AudioSource | 'all';
-                    setSearchSource(nextSource);
-                    if (searchQuery) handleSearch(searchQuery, nextSource);
+                    setSearchSource(s.id as any);
+                    if (searchQuery) handleSearch(searchQuery, s.id as any);
                   }}
                   className={`text-xs px-3 py-1.5 rounded-xl border transition-all cursor-pointer font-medium ${
                     searchSource === s.id
@@ -605,6 +674,7 @@ export const App: React.FC = () => {
                     isPlaying={isPlaying}
                     isFavorite={favoriteTrackIds.has(track.id)}
                     isDownloaded={downloadedTrackIds.has(track.id)}
+                    isDownloading={downloadingIds.has(track.id)}
                     fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
                     accentColor={palette.accent}
                     onPlay={() => handlePlayTrack(track, searchResults)}
@@ -639,45 +709,45 @@ export const App: React.FC = () => {
                   <span>Любимые треки ({favorites.length})</span>
                 </h3>
                 {favorites.length > 0 && (
-                  <div className="flex items-center space-x-2">
-                    {isFavoritesExpanded && (
-                      <>
-                        <button
-                          onClick={() =>
-                            requestDownloadMultiple(
-                              favorites.filter((t) => !downloadedTrackIds.has(t.id))
-                            )
-                          }
-                          className="text-xs text-neutral-300 hover:text-emerald-400 flex items-center space-x-1 py-1 px-2.5 rounded-xl bg-white/5 border border-white/5 transition-colors cursor-pointer"
-                          title="Скачать все в память"
-                        >
-                          <Download size={13} />
-                          <span>Скачать все</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsFavSelectMode((prev) => !prev);
-                            setSelectedFavIds(new Set());
-                          }}
-                          className={`text-xs py-1 px-2.5 rounded-xl border transition-all cursor-pointer font-medium ${
-                            isFavSelectMode
-                              ? 'bg-rose-500 text-white border-rose-500'
-                              : 'bg-white/5 border-white/5 text-neutral-300 hover:text-white'
-                          }`}
-                        >
-                          {isFavSelectMode ? 'Готово' : 'Выбрать'}
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => handlePlayTrack(favorites[0], favorites)}
-                      className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
-                    >
-                      Слушать все
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handlePlayTrack(favorites[0], favorites)}
+                    className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer whitespace-nowrap"
+                  >
+                    Слушать все
+                  </button>
                 )}
               </div>
+
+              {/* Sub toolbar when expanded or has items */}
+              {favorites.length > 0 && isFavoritesExpanded && (
+                <div className="flex items-center space-x-2 px-1 overflow-x-auto whitespace-nowrap scrollbar-none py-0.5">
+                  <button
+                    onClick={() =>
+                      requestDownloadMultiple(
+                        favorites.filter((t) => !downloadedTrackIds.has(t.id))
+                      )
+                    }
+                    className="text-xs text-neutral-300 hover:text-emerald-400 flex items-center space-x-1.5 py-1.5 px-3 rounded-xl bg-white/5 border border-white/5 transition-colors cursor-pointer shrink-0"
+                    title="Скачать все в память"
+                  >
+                    <Download size={13} />
+                    <span>Скачать все</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsFavSelectMode((prev) => !prev);
+                      setSelectedFavIds(new Set());
+                    }}
+                    className={`text-xs py-1.5 px-3 rounded-xl border transition-all cursor-pointer font-medium shrink-0 ${
+                      isFavSelectMode
+                        ? 'bg-rose-500 text-white border-rose-500'
+                        : 'bg-white/5 border-white/5 text-neutral-300 hover:text-white'
+                    }`}
+                  >
+                    {isFavSelectMode ? 'Готово' : 'Выбрать'}
+                  </button>
+                </div>
+              )}
 
               {/* Selection action bar for Favorites */}
               {isFavSelectMode && favorites.length > 0 && (
@@ -738,6 +808,7 @@ export const App: React.FC = () => {
                         isPlaying={isPlaying}
                         isFavorite={true}
                         isDownloaded={downloadedTrackIds.has(track.id)}
+                        isDownloading={downloadingIds.has(track.id)}
                         fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
                         accentColor={palette.accent}
                         isSelectMode={isFavSelectMode}
@@ -806,6 +877,7 @@ export const App: React.FC = () => {
                         isPlaying={isPlaying}
                         isFavorite={favoriteTrackIds.has(track.id)}
                         isDownloaded={downloadedTrackIds.has(track.id)}
+                        isDownloading={downloadingIds.has(track.id)}
                         fileSize={downloadedTracks.find((t) => t.id === track.id)?.fileSize}
                         accentColor={palette.accent}
                         onPlay={() => handlePlayTrack(track, history)}
@@ -836,41 +908,61 @@ export const App: React.FC = () => {
         {/* TAB 4: OFFLINE */}
         {activeTab === 'offline' && (
           <div className="max-w-xl mx-auto space-y-4">
-            <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-950/40 to-[#1D1B1B] border border-emerald-500/20 flex items-center justify-between shadow-xl">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                  <DownloadCloud size={20} />
+            <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-950/40 to-[#1D1B1B] border border-emerald-500/20 shadow-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <DownloadCloud size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">Офлайн треки</h3>
+                    <p className="text-[11px] text-neutral-300">
+                      Сохранено на устройстве ({downloadedTracks.length})
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-sm text-white">Офлайн треки</h3>
-                  <p className="text-[11px] text-neutral-300">
-                    Сохранено на устройстве. Доступно без интернета!
-                  </p>
+
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-medium text-xs flex items-center space-x-1 transition-all active:scale-95 cursor-pointer"
+                    title="Добавить трек с устройства"
+                  >
+                    <FolderPlus size={14} className="text-emerald-400" />
+                    <span>+ Файл</span>
+                  </button>
+                  {downloadedTracks.length > 0 && (
+                    <button
+                      onClick={() => handlePlayTrack(downloadedTracks[0], downloadedTracks)}
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center space-x-1 shadow transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Play size={12} fill="currentColor" />
+                      <span>Слушать</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
               {downloadedTracks.length > 0 && (
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => {
-                      setIsOfflineSelectMode((prev) => !prev);
-                      setSelectedOfflineIds(new Set());
-                    }}
-                    className={`px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold cursor-pointer ${
-                      isOfflineSelectMode
-                        ? 'bg-rose-500 text-white border-rose-500'
-                        : 'bg-white/10 border-white/10 text-white hover:bg-white/20'
-                    }`}
-                  >
-                    {isOfflineSelectMode ? 'Готово' : 'Выбрать'}
-                  </button>
-                  <button
-                    onClick={() => handlePlayTrack(downloadedTracks[0], downloadedTracks)}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center space-x-1.5 shadow transition-all active:scale-95 cursor-pointer"
-                  >
-                    <Play size={13} fill="currentColor" />
-                    <span>Слушать всё</span>
-                  </button>
+                <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                  <span className="text-[11px] text-neutral-400">
+                    {downloadedTracks.length} треков в памяти
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => {
+                        setIsOfflineSelectMode((prev) => !prev);
+                        setSelectedOfflineIds(new Set());
+                      }}
+                      className={`px-2.5 py-1 rounded-lg border transition-all text-[11px] font-semibold cursor-pointer ${
+                        isOfflineSelectMode
+                          ? 'bg-rose-500 text-white border-rose-500'
+                          : 'bg-white/5 border-white/10 text-neutral-300 hover:text-white'
+                      }`}
+                    >
+                      {isOfflineSelectMode ? 'Готово' : 'Выбрать'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -917,6 +1009,7 @@ export const App: React.FC = () => {
                     isPlaying={isPlaying}
                     isFavorite={favoriteTrackIds.has(track.id)}
                     isDownloaded={true}
+                    isDownloading={downloadingIds.has(track.id)}
                     fileSize={track.fileSize}
                     accentColor={palette.accent}
                     isSelectMode={isOfflineSelectMode}
@@ -936,7 +1029,7 @@ export const App: React.FC = () => {
                   <DownloadCloud size={36} className="mx-auto text-neutral-600 opacity-60" />
                   <p className="text-xs font-medium">Нет скачанных треков</p>
                   <p className="text-[11px] text-neutral-600 max-w-xs mx-auto">
-                    Лайкайте треки (сердечко) или нажимайте кнопку скачивания в плеере!
+                    Лайкайте треки (сердечко), качайте из поиска или добавьте локальный файл кнопкой «+ Файл»!
                   </p>
                 </div>
               )}
@@ -957,6 +1050,7 @@ export const App: React.FC = () => {
               accentColor={palette.accent}
               glowColor={palette.glow}
               onTogglePlay={handleTogglePlay}
+              onPrev={handlePrevTrack}
               onNext={handleNextTrack}
               onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
             />
@@ -982,6 +1076,7 @@ export const App: React.FC = () => {
         isFavorite={isCurrentFavorite}
         isShuffle={isShuffle}
         isRepeat={isRepeat}
+        isDownloading={currentTrack ? downloadingIds.has(currentTrack.id) : false}
         volume={volume}
         visualizerData={visualizerData}
         accentColor={palette.accent}

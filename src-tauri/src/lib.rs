@@ -67,7 +67,23 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                     let req_str = String::from_utf8_lossy(&buf[..n]);
                     let first_line = req_str.lines().next().unwrap_or("");
                     let parts: Vec<&str> = first_line.split_whitespace().collect();
-                    if parts.len() < 2 || parts[0] != "GET" {
+                    if parts.len() < 2 {
+                        return;
+                    }
+
+                    let method = parts[0];
+                    if method == "OPTIONS" {
+                        let cors_resp = "HTTP/1.1 204 No Content\r\n\
+                             Access-Control-Allow-Origin: *\r\n\
+                             Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n\
+                             Access-Control-Allow-Headers: *\r\n\
+                             Access-Control-Max-Age: 86400\r\n\
+                             Connection: close\r\n\r\n";
+                        let _ = stream.write_all(cors_resp.as_bytes()).await;
+                        return;
+                    }
+
+                    if method != "GET" && method != "HEAD" {
                         return;
                     }
 
@@ -77,7 +93,7 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                         .trim_start_matches("/track/");
                     let clean_id = sanitize_track_id(raw_id);
                     if clean_id.is_empty() {
-                        let bad_req = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+                        let bad_req = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                         let _ = stream.write_all(bad_req.as_bytes()).await;
                         return;
                     }
@@ -85,7 +101,7 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                     let file_path = dir.join("downloads").join(format!("{}.audio", clean_id));
 
                     if !file_path.exists() {
-                        let not_found = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
+                        let not_found = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n";
                         let _ = stream.write_all(not_found.as_bytes()).await;
                         return;
                     }
@@ -97,12 +113,25 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
 
                     let total_len = file_bytes.len();
                     let mime_type = if file_bytes.starts_with(b"ID3")
-                        || file_bytes.starts_with(&[0xFF, 0xFB])
-                        || file_bytes.starts_with(&[0xFF, 0xF3])
+                        || (file_bytes.len() > 1
+                            && file_bytes[0] == 0xFF
+                            && (file_bytes[1] & 0xE0) == 0xE0)
                     {
                         "audio/mpeg"
-                    } else {
+                    } else if file_bytes.starts_with(b"OggS") {
+                        "audio/ogg"
+                    } else if file_bytes.starts_with(b"RIFF") {
+                        "audio/wav"
+                    } else if file_bytes.starts_with(b"fLaC") {
+                        "audio/flac"
+                    } else if file_bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+                        "audio/webm"
+                    } else if file_bytes.len() > 12
+                        && (&file_bytes[4..8] == b"ftyp" || &file_bytes[4..8] == b"moov")
+                    {
                         "audio/mp4"
+                    } else {
+                        "audio/mpeg"
                     };
 
                     // Range support
@@ -122,8 +151,8 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                             let end: usize = range_parts
                                 .get(1)
                                 .and_then(|s| s.parse().ok())
-                                .unwrap_or(total_len - 1);
-                            let end = end.min(total_len - 1);
+                                .unwrap_or(total_len.saturating_sub(1));
+                            let end = end.min(total_len.saturating_sub(1));
 
                             if start <= end && start < total_len {
                                 let chunk_len = end - start + 1;
@@ -133,11 +162,17 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                                      Content-Length: {}\r\n\
                                      Content-Range: bytes {}-{}/{}\r\n\
                                      Accept-Ranges: bytes\r\n\
-                                     Access-Control-Allow-Origin: *\r\n\r\n",
+                                     Access-Control-Allow-Origin: *\r\n\
+                                     Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n\
+                                     Access-Control-Allow-Headers: *\r\n\
+                                     Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges\r\n\
+                                     Connection: close\r\n\r\n",
                                     mime_type, chunk_len, start, end, total_len
                                 );
                                 let _ = stream.write_all(header.as_bytes()).await;
-                                let _ = stream.write_all(&file_bytes[start..=end]).await;
+                                if method == "GET" {
+                                    let _ = stream.write_all(&file_bytes[start..=end]).await;
+                                }
                                 return;
                             }
                         }
@@ -148,11 +183,17 @@ fn ensure_offline_server_started(app_dir: PathBuf) {
                          Content-Type: {}\r\n\
                          Content-Length: {}\r\n\
                          Accept-Ranges: bytes\r\n\
-                         Access-Control-Allow-Origin: *\r\n\r\n",
+                         Access-Control-Allow-Origin: *\r\n\
+                         Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n\
+                         Access-Control-Allow-Headers: *\r\n\
+                         Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges\r\n\
+                         Connection: close\r\n\r\n",
                         mime_type, total_len
                     );
                     let _ = stream.write_all(header.as_bytes()).await;
-                    let _ = stream.write_all(&file_bytes).await;
+                    if method == "GET" {
+                        let _ = stream.write_all(&file_bytes).await;
+                    }
                 });
             }
         }
@@ -483,7 +524,16 @@ async fn search_music_native(
                             .get("media")
                             .and_then(|m| m.get("transcodings"))
                             .and_then(|t| t.as_array())
-                            .and_then(|arr| arr.first())
+                            .and_then(|arr| {
+                                arr.iter()
+                                    .find(|tc| {
+                                        tc.get("format")
+                                            .and_then(|f| f.get("protocol"))
+                                            .and_then(|p| p.as_str())
+                                            == Some("progressive")
+                                    })
+                                    .or_else(|| arr.first())
+                            })
                             .and_then(|tc| tc.get("url"))
                             .and_then(|u| u.as_str())
                             .map(|u| format!("sc_transcoding:{}", u));
@@ -661,6 +711,33 @@ async fn download_track_file(
 }
 
 #[tauri::command]
+fn save_local_track_file(
+    app: tauri::AppHandle,
+    track_id: String,
+    file_bytes: Vec<u8>,
+) -> Result<String, String> {
+    let clean_id = sanitize_track_id(&track_id);
+    if clean_id.is_empty() {
+        return Err("Invalid track ID".into());
+    }
+    if file_bytes.is_empty() {
+        return Err("Empty audio file".into());
+    }
+    let dir = get_app_dir(&app)?;
+    let dl_dir = dir.join("downloads");
+    if !dl_dir.exists() {
+        let _ = fs::create_dir_all(&dl_dir);
+    }
+    let file_path = dl_dir.join(format!("{}.audio", clean_id));
+    fs::write(&file_path, &file_bytes).map_err(|e| format!("Failed to write track file: {}", e))?;
+
+    ensure_offline_server_started(dir);
+
+    let size_mb = (file_bytes.len() as f64) / (1024.0 * 1024.0);
+    Ok(format!("{:.1} МБ", size_mb))
+}
+
+#[tauri::command]
 fn get_downloaded_track_audio(app: tauri::AppHandle, track_id: String) -> Result<String, String> {
     let clean_id = sanitize_track_id(&track_id);
     let dir = get_app_dir(&app)?;
@@ -701,6 +778,7 @@ pub fn run() {
             search_music_native,
             resolve_stream_url_native,
             download_track_file,
+            save_local_track_file,
             get_downloaded_track_audio,
             delete_downloaded_track_file
         ])

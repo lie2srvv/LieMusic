@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -42,6 +43,7 @@ class MediaPlaybackService : Service() {
 
     private lateinit var mediaSession: MediaSessionCompat
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private var currentTitle = "LieMusic"
     private var currentArtist = "Свободный стриминг"
@@ -57,6 +59,18 @@ class MediaPlaybackService : Service() {
         super.onCreate()
         createNotificationChannel()
         initMediaSession()
+
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            wakeLock = powerManager?.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "LieMusic:PlaybackWakeLock"
+            )?.apply {
+                setReferenceCounted(false)
+            }
+        } catch (e: Exception) {
+            // Ignore wakelock acquisition failure
+        }
     }
 
     private fun initMediaSession() {
@@ -137,6 +151,8 @@ class MediaPlaybackService : Service() {
                 currentPositionMs = newPos
                 currentDurationMs = newDur
 
+                syncWakeLock()
+
                 if (newCover.isNotBlank() && newCover != currentCoverUrl) {
                     loadCoverArt(newCover)
                 }
@@ -146,6 +162,7 @@ class MediaPlaybackService : Service() {
             ACTION_TOGGLE -> {
                 MainActivity.dispatchMediaAction("toggle")
                 isPlaying = !isPlaying
+                syncWakeLock()
                 updateNotification()
             }
             ACTION_NEXT -> {
@@ -155,12 +172,37 @@ class MediaPlaybackService : Service() {
                 MainActivity.dispatchMediaAction("prev")
             }
             ACTION_STOP -> {
+                releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
         }
 
         return START_STICKY
+    }
+
+    private fun syncWakeLock() {
+        try {
+            if (isPlaying) {
+                if (wakeLock?.isHeld != true) {
+                    wakeLock?.acquire(3 * 60 * 60 * 1000L) // 3 hours timeout
+                }
+            } else {
+                releaseWakeLock()
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
     }
 
     private fun loadCoverArt(url: String) {
@@ -272,8 +314,6 @@ class MediaPlaybackService : Service() {
         }
         val playPauseTitle = if (isPlaying) "Пауза" else "Играть"
 
-        // CRITICAL: Connecting MediaSession token to MediaStyle is what tells Android SystemUI
-        // to render the full native Android Quick Settings media carousel!
         val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()
             .setMediaSession(mediaSession.sessionToken)
             .setShowActionsInCompactView(0, 1, 2)
@@ -309,6 +349,7 @@ class MediaPlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        releaseWakeLock()
         if (::mediaSession.isInitialized) {
             mediaSession.isActive = false
             mediaSession.release()

@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -75,6 +76,13 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
 
+    // Intercept back navigation: send task to background instead of destroying Activity and killing playback!
+    onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+      override fun handleOnBackPressed() {
+        moveTaskToBack(true)
+      }
+    })
+
     // Request Notification permission for Android 13+ (API 33+)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -97,14 +105,14 @@ class MainActivity : TauriActivity() {
     webView.addJavascriptInterface(MediaNotificationBridge(this), "AndroidMediaNotification")
   }
 
-  // CRITICAL: Overriding onPause and onStop to prevent WebView from halting audio playback when app is minimized!
+  // Prevent WebView from halting audio playback when app is minimized or screen turned off
   override fun onPause() {
-    // Only notify plugin manager, do NOT call mWebView.onPause() which kills background music!
-    getPluginManager().onPause(this)
+    super.onPause()
+    // Re-enable WebView playback so audio keeps running in the background/lockscreen
+    webViewRef?.onResume()
   }
 
   override fun onStop() {
-    // Do not freeze webview
-    getPluginManager().onStop(this)
+    super.onStop()
   }
 }

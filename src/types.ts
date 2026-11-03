@@ -11,6 +11,7 @@ export interface Track {
   streamUrl?: string;
   streamExpiry?: number;
   isDownloaded?: boolean;
+  fileSize?: string;
   localPath?: string;
 }
 

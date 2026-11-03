@@ -62,26 +62,6 @@ export const FEATURED_TRENDING_TRACKS: Track[] = [
     source: 'youtube',
     streamUrl: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=synthwave-80s-110045.mp3',
   },
-  {
-    id: 'yt_trending_7',
-    title: 'Sweater Weather',
-    artist: 'The Neighbourhood',
-    album: 'I Love You.',
-    duration: 240,
-    thumbnail: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=500&auto=format&fit=crop&q=80',
-    source: 'youtube',
-    streamUrl: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c3527e30e2.mp3?filename=chill-abstract-intention-12099.mp3',
-  },
-  {
-    id: 'yt_trending_8',
-    title: 'After Dark',
-    artist: 'Mr.Kitty',
-    album: 'TIME',
-    duration: 259,
-    thumbnail: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500&auto=format&fit=crop&q=80',
-    source: 'youtube',
-    streamUrl: 'https://cdn.pixabay.com/download/audio/2022/10/25/audio_24483fe6d1.mp3?filename=phonk-drift-124430.mp3',
-  },
 ];
 
 export async function searchYouTubeTracks(query: string): Promise<Track[]> {
@@ -91,7 +71,7 @@ export async function searchYouTubeTracks(query: string): Promise<Track[]> {
 
   const cleanQuery = query.trim();
 
-  // Try Native Rust search first (bypasses CORS, hits InnerTube API)
+  // Try Native Rust search first
   try {
     const raw = await invoke<any[]>('search_music_native', {
       query: cleanQuery,
@@ -114,17 +94,31 @@ export async function searchYouTubeTracks(query: string): Promise<Track[]> {
     console.warn('[LieMusic] Native YouTube search failed, falling back:', err);
   }
 
-  // Local fallback filter if offline
+  const clean = cleanQuery.toLowerCase();
   return FEATURED_TRENDING_TRACKS.filter(
     (t) =>
-      t.title.toLowerCase().includes(cleanQuery.toLowerCase()) ||
-      t.artist.toLowerCase().includes(cleanQuery.toLowerCase())
+      t.title.toLowerCase().includes(clean) ||
+      t.artist.toLowerCase().includes(clean)
   );
 }
 
 export async function resolveStreamUrl(track: Track): Promise<string> {
+  // If track is downloaded, read local offline audio!
+  if (track.isDownloaded) {
+    try {
+      const offlineAudio = await invoke<string>('get_downloaded_track_audio', {
+        trackId: track.id,
+      });
+      if (offlineAudio && offlineAudio.length > 0) {
+        return offlineAudio;
+      }
+    } catch (e) {
+      console.warn('[LieMusic] Error fetching offline audio:', e);
+    }
+  }
+
   // If track already has direct playable mp3
-  if (track.streamUrl && !track.streamUrl.startsWith('sc_transcoding:') && !track.streamUrl.startsWith('piped:')) {
+  if (track.streamUrl && !track.streamUrl.startsWith('sc_transcoding:') && !track.streamUrl.startsWith('yt_')) {
     return track.streamUrl;
   }
 

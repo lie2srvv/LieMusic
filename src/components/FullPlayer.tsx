@@ -1,17 +1,18 @@
 import React from 'react';
 import {
   ChevronDown,
-  Heart,
   Play,
   Pause,
-  SkipBack,
   SkipForward,
+  SkipBack,
   Shuffle,
   Repeat,
-  Sliders,
+  Heart,
   Mic2,
+  Sliders,
   Download,
-  Volume2,
+  Check,
+  Disc3,
 } from 'lucide-react';
 import { Track } from '../types';
 
@@ -37,7 +38,7 @@ interface FullPlayerProps {
   onToggleFavorite: () => void;
   onToggleShuffle: () => void;
   onToggleRepeat: () => void;
-  onVolumeChange: (vol: number) => void;
+  onVolumeChange: (volume: number) => void;
   onOpenLyrics: () => void;
   onOpenEqualizer: () => void;
   onDownloadTrack: () => void;
@@ -54,7 +55,6 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   isFavorite,
   isShuffle,
   isRepeat,
-  volume,
   visualizerData,
   accentColor,
   glowColor,
@@ -66,7 +66,6 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   onToggleFavorite,
   onToggleShuffle,
   onToggleRepeat,
-  onVolumeChange,
   onOpenLyrics,
   onOpenEqualizer,
   onDownloadTrack,
@@ -75,108 +74,105 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   if (!isOpen || !track) return null;
 
   const formatTime = (secs: number) => {
-    if (isNaN(secs) || secs < 0) return '0:00';
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-[#121010] flex flex-col justify-between overflow-hidden animate-in slide-in-from-bottom duration-300">
-      {/* Monet Ambient Glow Backdrop */}
-      <div
-        className="absolute -top-32 -left-20 right-0 h-[65vh] opacity-40 blur-[110px] pointer-events-none transition-all duration-700"
-        style={{
-          background: `radial-gradient(circle at center, ${glowColor} 0%, transparent 70%)`,
-        }}
-      />
-
-      {/* Top Header */}
-      <div className="relative z-10 flex items-center justify-between p-4 safe-area-pt">
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-between bg-[#131111]/98 backdrop-blur-3xl text-white px-6 pt-12 pb-10 transition-all duration-300 overflow-y-auto safe-area-pt safe-area-pb"
+      style={{
+        backgroundImage: `radial-gradient(circle at 50% 30%, ${glowColor} 0%, transparent 70%)`,
+      }}
+    >
+      {/* Top Bar */}
+      <div className="flex items-center justify-between shrink-0">
         <button
           onClick={onClose}
-          className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white active:scale-95 transition-all cursor-pointer"
+          className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
+          title="Свернуть"
         >
           <ChevronDown size={24} />
         </button>
 
-        <div className="text-center overflow-hidden px-2">
-          <span className="text-[10px] font-bold tracking-widest uppercase text-neutral-400">
+        <div className="text-center">
+          <p className="text-[10px] uppercase font-bold tracking-widest text-neutral-400">
             Сейчас играет
-          </span>
-          <p className="text-xs font-semibold text-neutral-300 truncate max-w-[200px]">
-            {track.album || 'LieMusic'}
+          </p>
+          <p className="text-xs font-semibold text-neutral-200 mt-0.5">
+            {track.album || (track.source === 'youtube' ? 'YouTube Music' : 'SoundCloud')}
           </p>
         </div>
 
         <button
           onClick={onToggleFavorite}
-          className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-all cursor-pointer ${
-            isFavorite ? 'bg-rose-500/20 text-rose-500' : 'bg-white/5 text-neutral-300 hover:text-white'
+          className={`w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-transform active:scale-90 cursor-pointer ${
+            isFavorite ? 'text-rose-500' : 'text-neutral-300 hover:text-white'
           }`}
+          title={isFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
         >
           <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
         </button>
       </div>
 
-      {/* Center: Large Artwork & Source Badge */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 my-2">
+      {/* Album Artwork & Visualizer */}
+      <div className="my-auto py-6 flex flex-col items-center justify-center max-w-sm mx-auto w-full">
         <div
-          className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-3xl overflow-hidden shadow-2xl transition-all duration-500 border border-white/10 group"
+          className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-3xl overflow-hidden shadow-2xl transition-all duration-500 bg-neutral-900 border border-white/10"
           style={{
-            boxShadow: `0 20px 60px -15px ${glowColor}`,
+            boxShadow: `0 20px 50px -10px ${glowColor}`,
           }}
         >
-          <img
-            src={track.thumbnail}
-            alt={track.title}
-            className="w-full h-full object-cover"
-          />
-
-          {/* Source Badge on Album Art */}
-          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-bold tracking-wide uppercase text-white flex items-center space-x-1">
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{
-                backgroundColor:
-                  track.source === 'youtube'
-                    ? '#EF4444'
-                    : track.source === 'soundcloud'
-                    ? '#F97316'
-                    : '#06B6D4',
-              }}
+          {track.thumbnail ? (
+            <img
+              src={track.thumbnail}
+              alt={track.title}
+              className={`w-full h-full object-cover transition-transform duration-700 ${
+                isPlaying ? 'scale-105' : 'scale-100'
+              }`}
             />
-            <span>
-              {track.source === 'youtube'
-                ? 'YouTube Music'
-                : track.source === 'soundcloud'
-                ? 'SoundCloud'
-                : 'Локальный'}
-            </span>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-neutral-600">
+              <Disc3 size={80} className={isPlaying ? 'animate-spin' : ''} />
+            </div>
+          )}
+
+          {/* Source Badge */}
+          <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border border-white/10 flex items-center space-x-1.5">
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: track.source === 'youtube' ? '#EF4444' : '#F97316' }}
+            />
+            <span>{track.source === 'youtube' ? 'YouTube Music' : 'SoundCloud'}</span>
           </div>
         </div>
 
-        {/* Live Audio Visualizer Bars */}
-        <div className="flex items-end justify-center space-x-1 h-6 mt-4 w-48 opacity-75">
-          {Array.from(visualizerData.slice(0, 20)).map((val, i) => (
-            <div
-              key={i}
-              className="w-1.5 rounded-full transition-all duration-75"
-              style={{
-                height: `${Math.max(3, (val / 255) * 24)}px`,
-                backgroundColor: accentColor,
-              }}
-            />
-          ))}
+        {/* Real-time Audio Spectrum Bars */}
+        <div className="w-full flex items-center justify-center space-x-1 h-8 mt-6 px-4">
+          {Array.from(visualizerData.slice(0, 24)).map((val, idx) => {
+            const heightPercent = isPlaying ? Math.max(12, (val / 255) * 100) : 10;
+            return (
+              <div
+                key={idx}
+                className="w-1 rounded-full transition-all duration-75"
+                style={{
+                  height: `${heightPercent}%`,
+                  backgroundColor: accentColor,
+                  opacity: 0.35 + (heightPercent / 100) * 0.65,
+                }}
+              />
+            );
+          })}
         </div>
       </div>
 
-      {/* Bottom Player Section */}
-      <div className="relative z-10 bg-[#161414]/90 backdrop-blur-2xl border-t border-white/5 rounded-t-[32px] p-6 pb-8 safe-area-pb">
-        {/* Track Title and Quick Feature Icons */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="overflow-hidden flex-1 mr-3">
-            <h2 className="text-xl font-bold text-white tracking-tight truncate">
+      {/* Bottom Controls Area */}
+      <div className="max-w-md mx-auto w-full shrink-0 space-y-4">
+        {/* Track Title, Artist & Pro Badges */}
+        <div className="flex items-center justify-between">
+          <div className="overflow-hidden flex-1 mr-4">
+            <h2 className="text-xl font-bold text-white truncate tracking-tight">
               {track.title}
             </h2>
             <p className="text-sm text-neutral-400 truncate mt-0.5 font-medium">
@@ -184,32 +180,26 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center space-x-2 shrink-0">
-            {/* Lyrics Button */}
+          <div className="flex items-center space-x-2">
+            {/* Synced Lyrics Button */}
             <button
               onClick={onOpenLyrics}
-              className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white transition-all active:scale-95 cursor-pointer relative"
-              title="Текст песни (LRCLIB)"
+              className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
+              title="Текст песни (Караоке)"
             >
               <Mic2 size={18} />
-              {!isPro && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400" />
-              )}
             </button>
 
-            {/* Equalizer Button */}
+            {/* 10-band Equalizer Button */}
             <button
               onClick={onOpenEqualizer}
-              className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white transition-all active:scale-95 cursor-pointer relative"
-              title="Эквалайзер"
+              className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
+              title="Эквалайзер и Bass Boost"
             >
               <Sliders size={18} />
-              {!isPro && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400" />
-              )}
             </button>
 
-            {/* Download Button */}
+            {/* Offline Download Button */}
             <button
               onClick={() => {
                 if (!isPro) {
@@ -218,24 +208,30 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                   onDownloadTrack();
                 }
               }}
-              className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white transition-all active:scale-95 cursor-pointer relative"
-              title={track.isDownloaded ? 'Скачано' : 'Скачать трек в офлайн'}
+              className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-all active:scale-90 cursor-pointer ${
+                track.isDownloaded
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  : 'bg-white/5 hover:bg-white/10 border-white/5 text-neutral-300 hover:text-white'
+              }`}
+              title={
+                track.isDownloaded
+                  ? 'Скачано офлайн'
+                  : isPro
+                  ? 'Скачать трек'
+                  : 'Скачать (LieMusic Pro)'
+              }
             >
-              <Download size={18} className={track.isDownloaded ? 'text-emerald-400' : ''} />
-              {!isPro && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400" />
-              )}
+              {track.isDownloaded ? <Check size={18} /> : <Download size={18} />}
             </button>
           </div>
         </div>
 
-        {/* Progress Slider */}
-        <div className="space-y-1.5 my-3">
+        {/* Progress Bar & Seek Scrub */}
+        <div className="space-y-1.5 pt-1">
           <input
             type="range"
             min="0"
             max={duration || 100}
-            step="1"
             value={currentTime}
             onChange={(e) => onSeek(Number(e.target.value))}
             className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer"
@@ -248,13 +244,14 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
         </div>
 
         {/* Playback Controls Row */}
-        <div className="flex items-center justify-between mt-3 px-2">
+        <div className="flex items-center justify-between pt-1 px-2">
           <button
             onClick={onToggleShuffle}
             className={`p-2 rounded-full transition-colors cursor-pointer ${
               isShuffle ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
             }`}
             style={{ color: isShuffle ? accentColor : undefined }}
+            title="Перемешать"
           >
             <Shuffle size={20} />
           </button>
@@ -262,6 +259,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
           <button
             onClick={onPrev}
             className="p-2.5 rounded-full text-neutral-200 hover:text-white active:scale-90 transition-transform cursor-pointer"
+            title="Предыдущий трек"
           >
             <SkipBack size={26} />
           </button>
@@ -274,6 +272,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
               color: '#151313',
               boxShadow: `0 8px 30px ${glowColor}`,
             }}
+            title={isPlaying ? 'Пауза' : 'Играть'}
           >
             {isPlaying ? (
               <Pause size={28} fill="#151313" />
@@ -285,6 +284,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
           <button
             onClick={onNext}
             className="p-2.5 rounded-full text-neutral-200 hover:text-white active:scale-90 transition-transform cursor-pointer"
+            title="Следующий трек"
           >
             <SkipForward size={26} />
           </button>
@@ -295,24 +295,10 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
               isRepeat ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'
             }`}
             style={{ color: isRepeat ? accentColor : undefined }}
+            title="Повтор"
           >
             <Repeat size={20} />
           </button>
-        </div>
-
-        {/* Volume slider on Desktop / Tablet */}
-        <div className="mt-4 pt-3 border-t border-white/5 flex items-center space-x-3 text-neutral-400">
-          <Volume2 size={16} />
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(e) => onVolumeChange(Number(e.target.value))}
-            className="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer"
-            style={{ accentColor: accentColor }}
-          />
         </div>
       </div>
     </div>

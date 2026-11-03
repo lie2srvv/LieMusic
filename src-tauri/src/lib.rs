@@ -25,19 +25,6 @@ pub struct LicenseResult {
     pub activated_at: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CheckOrderPayload {
-    pub order_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CheckOrderResponse {
-    pub success: bool,
-    pub status: Option<String>,
-    pub message: Option<String>,
-    pub key: Option<String>,
-}
-
 fn get_app_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -341,7 +328,6 @@ async fn search_music_native(
                             .unwrap_or("https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500")
                             .to_string();
 
-                        // Get first stream url if available
                         let stream_url = item
                             .get("media")
                             .and_then(|m| m.get("transcodings"))
@@ -381,7 +367,7 @@ async fn resolve_stream_url_native(
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-        .timeout(std::time::Duration::from_secs(6))
+        .timeout(std::time::Duration::from_secs(8))
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -397,7 +383,7 @@ async fn resolve_stream_url_native(
                     }
                 }
             }
-        } else if !url.is_empty() {
+        } else if !url.is_empty() && !url.starts_with("yt_") {
             return Ok(url.clone());
         }
     }
@@ -405,15 +391,118 @@ async fn resolve_stream_url_native(
     // 2. If YouTube track
     if source == "youtube" || track_id.starts_with("yt_") {
         let video_id = track_id.replace("yt_", "");
-        let inv_url = format!(
-            "https://yt.chocolatemoo53.com/latest_version?id={}&itag=140",
+        
+        let invidious_hosts = [
+            "https://yt.chocolatemoo53.com",
+            "https://invidious.nerdvpn.de",
+            "https://inv.tux.pizza",
+            "https://invidious.drgns.space",
+        ];
+
+        for host in invidious_hosts {
+            let inv_url = format!(
+                "{}/latest_version?id={}&itag=140&local=true",
+                host, video_id
+            );
+            if let Ok(res) = client.get(&inv_url).send().await {
+                let final_url = res.url().to_string();
+                if !final_url.is_empty() && final_url != inv_url {
+                    return Ok(final_url);
+                }
+            }
+        }
+
+        return Ok(format!(
+            "https://yt.chocolatemoo53.com/latest_version?id={}&itag=140&local=true",
             video_id
-        );
-        return Ok(inv_url);
+        ));
     }
 
-    // Fallback pleasant audio
     Ok("https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3".into())
+}
+
+#[tauri::command]
+async fn download_track_file(
+    app: tauri::AppHandle,
+    track_id: String,
+    stream_url: Option<String>,
+    source: String,
+) -> Result<String, String> {
+    let dir = get_app_dir(&app)?;
+    let dl_dir = dir.join("downloads");
+    if !dl_dir.exists() {
+        let _ = fs::create_dir_all(&dl_dir);
+    }
+
+    // First resolve the real direct streaming URL
+    let resolved_url = resolve_stream_url_native(track_id.clone(), stream_url, source).await?;
+
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let res = client.get(&resolved_url).send().await.map_err(|e| format!("Download stream failed: {}", e))?;
+    let bytes = res.bytes().await.map_err(|e| format!("Failed to read stream bytes: {}", e))?;
+
+    let file_path = dl_dir.join(format!("{}.audio", track_id));
+    fs::write(&file_path, &bytes).map_err(|e| format!("Failed to write track file: {}", e))?;
+
+    let size_mb = (bytes.len() as f64) / (1024.0 * 1024.0);
+    Ok(format!("{:.1} МБ", size_mb))
+}
+
+#[tauri::command]
+fn get_downloaded_track_audio(
+    app: tauri::AppHandle,
+    track_id: String,
+) -> Result<String, String> {
+    let dir = get_app_dir(&app)?;
+    let file_path = dir.join("downloads").join(format!("{}.audio", track_id));
+    if !file_path.exists() {
+        return Err("Track not found in local offline storage".into());
+    }
+    let bytes = fs::read(&file_path).map_err(|e| e.to_string())?;
+    let base64_str = base64_encode(&bytes);
+    Ok(format!("data:audio/mp4;base64,{}", base64_str))
+}
+
+#[tauri::command]
+fn delete_downloaded_track_file(
+    app: tauri::AppHandle,
+    track_id: String,
+) -> Result<(), String> {
+    let dir = get_app_dir(&app)?;
+    let file_path = dir.join("downloads").join(format!("{}.audio", track_id));
+    if file_path.exists() {
+        let _ = fs::remove_file(file_path);
+    }
+    Ok(())
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARSET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        out.push(CHARSET[((triple >> 18) & 0x3F) as usize] as char);
+        out.push(CHARSET[((triple >> 12) & 0x3F) as usize] as char);
+        if chunk.len() > 1 {
+            out.push(CHARSET[((triple >> 6) & 0x3F) as usize] as char);
+        } else {
+            out.push('=');
+        }
+        if chunk.len() > 2 {
+            out.push(CHARSET[(triple & 0x3F) as usize] as char);
+        } else {
+            out.push('=');
+        }
+    }
+    out
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -426,7 +515,10 @@ pub fn run() {
             load_profile_file,
             verify_license_key,
             search_music_native,
-            resolve_stream_url_native
+            resolve_stream_url_native,
+            download_track_file,
+            get_downloaded_track_audio,
+            delete_downloaded_track_file
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

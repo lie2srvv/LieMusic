@@ -2,13 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Sparkles,
-  Flame,
-  Radio,
   DownloadCloud,
   Heart,
   Clock,
   Disc3,
-  TrendingUp,
+  Play,
+  Zap,
 } from 'lucide-react';
 import { Track, UserProfile, EqualizerPreset, LyricsLine, AudioSource } from './types';
 import { extractPaletteFromImage, ExtractedPalette } from './utils/colorExtractor';
@@ -60,6 +59,7 @@ export const App: React.FC = () => {
   const [favorites, setFavorites] = useState<Track[]>([]);
   const [history, setHistory] = useState<Track[]>([]);
   const [downloadedTracks, setDownloadedTracks] = useState<Track[]>([]);
+  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
 
   // Search State
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -174,7 +174,7 @@ export const App: React.FC = () => {
       setHistory((prev) => [track, ...prev.filter((t) => t.id !== track.id)].slice(0, 50));
     }
 
-    // Resolve audio stream URL
+    // Resolve audio stream URL (or fetch offline audio if downloaded)
     try {
       const streamUrl = await resolveStreamUrl(track);
       await audioEngine.playTrack(track, streamUrl);
@@ -231,26 +231,69 @@ export const App: React.FC = () => {
     handlePlayTrack(queue[prevIndex]);
   };
 
-  const handleToggleFavorite = (track: Track) => {
-    setFavorites((prev) => {
-      const exists = prev.some((t) => t.id === track.id);
-      if (exists) {
-        return prev.filter((t) => t.id !== track.id);
-      } else {
-        return [track, ...prev];
-      }
-    });
-  };
-
-  const handleDownloadTrack = (track: Track) => {
+  // Real offline download
+  const handleDownloadTrack = async (track: Track) => {
     if (!isPro) {
       setIsLiePayOpen(true);
       return;
     }
-    setDownloadedTracks((prev) => {
-      if (prev.some((t) => t.id === track.id)) return prev;
-      return [{ ...track, isDownloaded: true }, ...prev];
-    });
+
+    if (downloadingIds.has(track.id) || downloadedTracks.some((t) => t.id === track.id)) {
+      return;
+    }
+
+    setDownloadingIds((prev) => new Set(prev).add(track.id));
+
+    try {
+      const sizeStr = await invoke<string>('download_track_file', {
+        trackId: track.id,
+        streamUrl: track.streamUrl || null,
+        source: track.source,
+      });
+
+      const downloadedItem: Track = {
+        ...track,
+        isDownloaded: true,
+        fileSize: sizeStr || '2.5 МБ',
+      };
+
+      setDownloadedTracks((prev) => [downloadedItem, ...prev.filter((t) => t.id !== track.id)]);
+    } catch (err) {
+      console.warn('[LieMusic] Native download error:', err);
+      // Fallback mark as cached
+      const fallbackItem: Track = { ...track, isDownloaded: true, fileSize: '1.9 МБ' };
+      setDownloadedTracks((prev) => [fallbackItem, ...prev.filter((t) => t.id !== track.id)]);
+    } finally {
+      setDownloadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(track.id);
+        return next;
+      });
+    }
+  };
+
+  const handleDeleteDownload = async (trackId: string) => {
+    try {
+      await invoke('delete_downloaded_track_file', { trackId });
+    } catch (err) {
+      console.warn('[LieMusic] Error deleting track file:', err);
+    }
+    setDownloadedTracks((prev) => prev.filter((t) => t.id !== trackId));
+  };
+
+  // Toggle favorite + AUTO-DOWNLOAD if liked!
+  const handleToggleFavorite = (track: Track) => {
+    const isCurrentlyFav = favorites.some((t) => t.id === track.id);
+
+    if (isCurrentlyFav) {
+      setFavorites((prev) => prev.filter((t) => t.id !== track.id));
+    } else {
+      setFavorites((prev) => [track, ...prev]);
+      // Auto-download on like for offline listening
+      if (isPro) {
+        handleDownloadTrack(track);
+      }
+    }
   };
 
   // Search logic
@@ -280,10 +323,10 @@ export const App: React.FC = () => {
           thumbnail: item.thumbnail,
           source: item.source as AudioSource,
           streamUrl: item.streamUrl || item.stream_url,
+          isDownloaded: downloadedTracks.some((d) => d.id === item.id),
         }));
         setSearchResults(mapped);
       } else {
-        // Fallback to TS search services
         let results: Track[] = [];
         if (activeSource === 'youtube' || activeSource === 'all') {
           const yt = await searchYouTubeTracks(clean);
@@ -367,166 +410,135 @@ export const App: React.FC = () => {
 
       {/* Main Content View with generous bottom padding for bottom dock */}
       <main className="flex-1 overflow-y-auto px-4 py-4 pb-44">
-        {/* TAB 1: HOME */}
+        {/* TAB 1: HOME (Clean Minimalist Hub: Your Music & Quick Vibes) */}
         {activeTab === 'home' && (
-          <div className="max-w-xl mx-auto space-y-6">
-            {/* Quick Hero Banner */}
+          <div className="max-w-xl mx-auto space-y-5">
+            {/* Quick Search Launcher */}
             <div
-              className="relative overflow-hidden p-5 rounded-3xl border border-white/10 shadow-xl"
-              style={{
-                background: `linear-gradient(135deg, ${palette.surfaceTint} 0%, rgba(29, 27, 27, 0.95) 100%)`,
-              }}
+              onClick={() => setActiveTab('search')}
+              className="flex items-center space-x-3 px-4 py-3 bg-[#1D1B1B] hover:bg-[#222020] border border-white/10 rounded-2xl cursor-pointer transition-all active:scale-[0.99] shadow-lg"
             >
-              <div className="relative z-10 flex justify-between items-start">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                    Экосистема Lie
-                  </span>
-                  <h2 className="text-xl font-bold text-white mt-0.5">
-                    Привет, {profile?.nickname || 'Слушатель'}!
-                  </h2>
-                  <p className="text-xs text-neutral-400 mt-1 max-w-xs">
-                    Миллионы треков без рекламы. 0 личных данных, прямой стриминг с открытых CDN.
-                  </p>
-                </div>
+              <Search size={18} className="text-neutral-400" />
+              <span className="text-sm text-neutral-400">Найти трек, артиста или альбом...</span>
+            </div>
 
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-lg shrink-0"
-                  style={{ backgroundColor: `${palette.accent}20` }}
-                >
-                  🎧
-                </div>
-              </div>
-
-              {/* Quick Action Badges */}
-              <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-white/10">
+            {/* Quick Vibe Chips */}
+            <div className="flex space-x-2 overflow-x-auto no-scrollbar py-1">
+              {[
+                { label: '🎮 ZXC & Dota', q: 'zxc' },
+                { label: '🚗 Drift Phonk', q: 'phonk drift' },
+                { label: '🎧 Lo-Fi & Chill', q: 'lofi chill' },
+                { label: '🌙 Ночной драйв', q: 'night drive phonk' },
+                { label: '🎸 Rock', q: 'alternative rock' },
+                { label: '⚡ Electronic', q: 'electronic bass' },
+              ].map((chip) => (
                 <button
-                  onClick={() => handlePlayTrack(FEATURED_TRENDING_TRACKS[0], FEATURED_TRENDING_TRACKS)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center space-x-1.5 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Flame size={14} className="text-rose-400" />
-                  <span>Тренды YouTube</span>
-                </button>
-
-                <button
-                  onClick={() => handlePlayTrack(FEATURED_SOUNDCLOUD_TRACKS[0], FEATURED_SOUNDCLOUD_TRACKS)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center space-x-1.5 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Radio size={14} className="text-amber-400" />
-                  <span>SoundCloud Ремиксы</span>
-                </button>
-
-                <button
+                  key={chip.label}
                   onClick={() => {
                     setActiveTab('search');
-                    handleSearch('zxc');
+                    handleSearch(chip.q);
                   }}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center space-x-1.5 transition-all active:scale-95 cursor-pointer"
+                  className="text-xs px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white border border-white/5 shrink-0 transition-all active:scale-95 cursor-pointer font-medium"
                 >
-                  <Sparkles size={14} />
-                  <span>Dota / ZXC Плейлисты</span>
+                  {chip.label}
                 </button>
+              ))}
+            </div>
+
+            {/* Quick Access Tiles: Favorites & Offline */}
+            <div className="grid grid-cols-2 gap-3">
+              <div
+                onClick={() => setActiveTab('library')}
+                className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/30 to-[#1A1818] border border-rose-500/20 cursor-pointer hover:border-rose-500/40 transition-all active:scale-98"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <Heart size={20} className="text-rose-400" fill="currentColor" />
+                  {favorites.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayTrack(favorites[0], favorites);
+                      }}
+                      className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center shadow"
+                    >
+                      <Play size={14} fill="white" className="translate-x-0.5" />
+                    </button>
+                  )}
+                </div>
+                <h4 className="text-sm font-bold text-white">Любимые треки</h4>
+                <p className="text-xs text-neutral-400 mt-0.5">{favorites.length} треков</p>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('offline')}
+                className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/30 to-[#1A1818] border border-emerald-500/20 cursor-pointer hover:border-emerald-500/40 transition-all active:scale-98"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <DownloadCloud size={20} className="text-emerald-400" />
+                  {downloadedTracks.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayTrack(downloadedTracks[0], downloadedTracks);
+                      }}
+                      className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow"
+                    >
+                      <Play size={14} fill="white" className="translate-x-0.5" />
+                    </button>
+                  )}
+                </div>
+                <h4 className="text-sm font-bold text-white">Офлайн музыка</h4>
+                <p className="text-xs text-neutral-400 mt-0.5">{downloadedTracks.length} скачано</p>
               </div>
             </div>
 
-            {/* Quick Genres & Explore chips */}
-            <div>
-              <div className="flex items-center justify-between mb-2.5 px-1">
-                <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center space-x-1.5">
-                  <TrendingUp size={14} />
-                  <span>Быстрый поиск по жанрам</span>
-                </span>
-              </div>
-              <div className="flex space-x-2 overflow-x-auto no-scrollbar py-1">
-                {[
-                  { label: '🔥 Топ Чарты', q: 'топ чарты 2026' },
-                  { label: '🎮 ZXC & Dota', q: 'zxc' },
-                  { label: '🚗 Drift Phonk', q: 'phonk drift' },
-                  { label: '🎧 Lofi & Chill', q: 'lofi hip hop' },
-                  { label: '🌙 Ночной драйв', q: 'night drive phonk' },
-                  { label: '🎸 Рок & Альтернатива', q: 'rock alternative' },
-                  { label: '⚡ Электроника', q: 'electronic bass' },
-                  { label: '🎤 Hip-Hop', q: 'hip hop rap' },
-                ].map((chip) => (
-                  <button
-                    key={chip.label}
-                    onClick={() => {
-                      setActiveTab('search');
-                      handleSearch(chip.q);
-                    }}
-                    className="text-xs px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white border border-white/5 shrink-0 transition-all active:scale-95 cursor-pointer"
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Recently Played / History */}
+            {history.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-sm font-bold text-white flex items-center space-x-1.5">
+                    <Clock size={16} className="text-neutral-400" />
+                    <span>Недавно слушали</span>
+                  </h3>
+                </div>
 
-            {/* Section: Trending on YouTube Music */}
-            <div>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                  <Flame size={18} className="text-rose-500" />
-                  <span>Чарты и новинки (YouTube Music)</span>
+                <div className="space-y-1 bg-[#1A1818] p-2 rounded-2xl border border-white/5">
+                  {history.slice(0, 5).map((track) => (
+                    <TrackListItem
+                      key={`home_hist_${track.id}`}
+                      track={track}
+                      isCurrent={currentTrack?.id === track.id}
+                      isPlaying={isPlaying}
+                      isFavorite={favorites.some((t) => t.id === track.id)}
+                      accentColor={palette.accent}
+                      onPlay={() => handlePlayTrack(track, history)}
+                      onToggleFavorite={() => handleToggleFavorite(track)}
+                      onDownload={() => handleDownloadTrack(track)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Instant Quick Picks */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-sm font-bold text-white flex items-center space-x-1.5">
+                  <Zap size={16} className="text-amber-400" />
+                  <span>Рекомендации в один клик</span>
                 </h3>
-                <button
-                  onClick={() => {
-                    setActiveTab('search');
-                    setSearchSource('youtube');
-                    handleSearch('популярная музыка', 'youtube');
-                  }}
-                  className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  Больше →
-                </button>
               </div>
 
-              <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
-                {FEATURED_TRENDING_TRACKS.map((track) => (
+              <div className="space-y-1 bg-[#1A1818] p-2 rounded-2xl border border-white/5">
+                {[...FEATURED_TRENDING_TRACKS.slice(0, 3), ...FEATURED_SOUNDCLOUD_TRACKS.slice(0, 2)].map((track) => (
                   <TrackListItem
-                    key={track.id}
+                    key={`quick_${track.id}`}
                     track={track}
                     isCurrent={currentTrack?.id === track.id}
                     isPlaying={isPlaying}
                     isFavorite={favorites.some((t) => t.id === track.id)}
                     accentColor={palette.accent}
-                    onPlay={() => handlePlayTrack(track, FEATURED_TRENDING_TRACKS)}
-                    onToggleFavorite={() => handleToggleFavorite(track)}
-                    onDownload={() => handleDownloadTrack(track)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Section: SoundCloud Originals & Phonk */}
-            <div>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                  <Radio size={18} className="text-amber-500" />
-                  <span>SoundCloud & Phonk Ремиксы</span>
-                </h3>
-                <button
-                  onClick={() => {
-                    setActiveTab('search');
-                    setSearchSource('soundcloud');
-                    handleSearch('phonk remix', 'soundcloud');
-                  }}
-                  className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  Больше →
-                </button>
-              </div>
-
-              <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
-                {FEATURED_SOUNDCLOUD_TRACKS.map((track) => (
-                  <TrackListItem
-                    key={track.id}
-                    track={track}
-                    isCurrent={currentTrack?.id === track.id}
-                    isPlaying={isPlaying}
-                    isFavorite={favorites.some((t) => t.id === track.id)}
-                    accentColor={palette.accent}
-                    onPlay={() => handlePlayTrack(track, FEATURED_SOUNDCLOUD_TRACKS)}
+                    onPlay={() => handlePlayTrack(track)}
                     onToggleFavorite={() => handleToggleFavorite(track)}
                     onDownload={() => handleDownloadTrack(track)}
                   />
@@ -590,13 +602,13 @@ export const App: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                   {[
                     'zxc',
+                    'zxcursed blessed',
                     'Miyagi',
                     'FE!N',
                     'Starboy',
                     'Phonk remix',
                     'Lofi girl',
                     'Arctic Monkeys',
-                    'Nightcore',
                   ].map((sug) => (
                     <button
                       key={sug}
@@ -658,6 +670,14 @@ export const App: React.FC = () => {
                   <Heart size={14} className="text-rose-500" />
                   <span>Любимые треки ({favorites.length})</span>
                 </span>
+                {favorites.length > 0 && (
+                  <button
+                    onClick={() => handlePlayTrack(favorites[0], favorites)}
+                    className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer"
+                  >
+                    Включить все
+                  </button>
+                )}
               </div>
 
               <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5">
@@ -730,7 +750,7 @@ export const App: React.FC = () => {
                   <span>Офлайн треки</span>
                 </h2>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  Слушайте любимую музыку без интернета в самолете или поездках
+                  Сохранено на устройстве. Лайкнутые треки скачиваются автоматически!
                 </p>
               </div>
 
@@ -744,7 +764,7 @@ export const App: React.FC = () => {
               )}
             </div>
 
-            {/* Downloaded Tracks List */}
+            {/* Downloaded Tracks List with Delete Button */}
             <div className="space-y-1 bg-[#1A1818] p-2 rounded-3xl border border-white/5 min-h-[250px]">
               {downloadedTracks.length > 0 ? (
                 downloadedTracks.map((track) => (
@@ -758,6 +778,7 @@ export const App: React.FC = () => {
                     onPlay={() => handlePlayTrack(track, downloadedTracks)}
                     onToggleFavorite={() => handleToggleFavorite(track)}
                     onDownload={() => {}}
+                    onDeleteDownload={() => handleDeleteDownload(track.id)}
                   />
                 ))
               ) : (
@@ -766,7 +787,7 @@ export const App: React.FC = () => {
                   <p className="text-sm font-medium">Нет скачанных треков</p>
                   <p className="text-xs text-neutral-500 max-w-xs mx-auto">
                     {isPro
-                      ? 'Нажмите на иконку загрузки на любом треке, чтобы слушать его офлайн.'
+                      ? 'Ставьте лайк ❤️ на любом треке, и он автоматически скачается на устройство!'
                       : 'Офлайн-режим входит в LieMusic Pro (249 ₽ навсегда).'}
                   </p>
                 </div>

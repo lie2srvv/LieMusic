@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Heart, Download, Music2 } from 'lucide-react';
+import { Play, Heart, Download, Music2, Trash2 } from 'lucide-react';
 import { Track } from '../types';
 
 interface TrackListItemProps {
@@ -11,6 +11,7 @@ interface TrackListItemProps {
   onPlay: () => void;
   onToggleFavorite: () => void;
   onDownload: () => void;
+  onDeleteDownload?: () => void;
 }
 
 export const TrackListItem: React.FC<TrackListItemProps> = ({
@@ -22,6 +23,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
   onPlay,
   onToggleFavorite,
   onDownload,
+  onDeleteDownload,
 }) => {
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -98,6 +100,11 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
               {track.source === 'youtube' ? 'YT' : track.source === 'soundcloud' ? 'SC' : 'Local'}
             </span>
             <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
+            {track.fileSize && (
+              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-400/10 px-1 rounded">
+                {track.fileSize}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -114,15 +121,25 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
         </button>
 
-        <button
-          onClick={onDownload}
-          className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
-            track.isDownloaded ? 'text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
-          }`}
-          title={track.isDownloaded ? 'Скачано' : 'Скачать'}
-        >
-          <Download size={16} />
-        </button>
+        {onDeleteDownload ? (
+          <button
+            onClick={onDeleteDownload}
+            className="p-2 rounded-xl text-neutral-500 hover:text-rose-400 active:scale-90 transition-all cursor-pointer"
+            title="Удалить из памяти"
+          >
+            <Trash2 size={16} />
+          </button>
+        ) : (
+          <button
+            onClick={onDownload}
+            className={`p-2 rounded-xl transition-all active:scale-90 cursor-pointer ${
+              track.isDownloaded ? 'text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
+            }`}
+            title={track.isDownloaded ? 'Скачано на устройство' : 'Скачать'}
+          >
+            <Download size={16} />
+          </button>
+        )}
 
         <span className="text-xs font-mono text-neutral-500 w-10 text-right">
           {formatTime(track.duration)}

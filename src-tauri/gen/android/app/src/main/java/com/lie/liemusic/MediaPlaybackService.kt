@@ -319,7 +319,8 @@ class MediaPlaybackService : Service() {
             .setShowActionsInCompactView(0, 1, 2)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(0xFFF97316.toInt())
             .setContentTitle(currentTitle)
             .setContentText(currentArtist)
             .setSubText("LieMusic")

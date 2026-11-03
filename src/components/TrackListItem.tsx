@@ -11,6 +11,7 @@ interface TrackListItemProps {
   isFavorite: boolean;
   isDownloaded?: boolean;
   isDownloading?: boolean;
+  isDimmed?: boolean;
   fileSize?: string;
   showFileSize?: boolean;
   accentColor?: string;
@@ -32,6 +33,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
   isFavorite,
   isDownloaded,
   isDownloading,
+  isDimmed = false,
   fileSize,
   showFileSize = false,
   accentColor = '#FF3366',
@@ -94,7 +96,9 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
       onTouchStart={startPressTimer}
       onTouchEnd={cancelPressTimer}
       whileTap={{ scale: 0.985 }}
-      className={`group relative flex items-center justify-between p-2.5 rounded-2xl transition-colors cursor-pointer select-none ${
+      className={`group relative flex items-center justify-between p-2.5 rounded-2xl transition-all cursor-pointer select-none ${
+        isDimmed ? 'opacity-35 grayscale-[25%] hover:opacity-85' : 'opacity-100'
+      } ${
         isSelected
           ? 'bg-white/15 border border-white/20 shadow-lg'
           : isCurrent
@@ -144,7 +148,7 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
                   <span className="w-0.5 bg-white animate-pulse h-3.5 rounded-full delay-150" />
                 </div>
               ) : (
-                <Play size={16} fill="white" className="text-white translate-x-0.5" />
+                <Play size={16} fill="white" className="text-white" />
               )}
             </div>
           )}
@@ -173,6 +177,11 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
               {track.source === 'youtube' ? 'YT' : track.source === 'local' ? 'LOCAL' : 'SC'}
             </span>
             <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
+            {isDimmed && (
+              <span className="text-[9px] font-medium text-neutral-400 bg-white/5 border border-white/10 px-1 rounded">
+                {t.duplicate}
+              </span>
+            )}
             {showFileSize && isTrackDownloaded && trackFileSize && (
               <span className="text-[10px] font-mono font-medium text-emerald-400/90 bg-emerald-500/15 border border-emerald-500/20 px-1.5 py-0.5 rounded-md">
                 {trackFileSize}
@@ -194,55 +203,59 @@ export const TrackListItem: React.FC<TrackListItemProps> = ({
           className={`p-2 rounded-xl transition-colors cursor-pointer ${
             isFavorite
               ? 'text-rose-500 hover:text-rose-400'
-              : 'text-neutral-500 hover:text-white'
+              : 'text-neutral-500 hover:text-neutral-300'
           }`}
           title={isFavorite ? t.inFavorites : t.addToFavorites}
         >
-          <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+          <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
         </motion.button>
 
-        {isDownloading ? (
-          <div className="p-2 text-emerald-400" title={t.downloading}>
-            <Loader2 size={16} className="animate-spin" />
-          </div>
-        ) : isTrackDownloaded ? (
-          onDeleteDownload ? (
-            <motion.button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteDownload();
-              }}
-              whileTap={{ scale: 0.85 }}
-              className="p-2 text-neutral-500 hover:text-rose-400 transition-colors cursor-pointer"
-              title={t.deleteFromDevice}
-            >
-              <Trash2 size={16} />
-            </motion.button>
-          ) : (
-            <div className="p-2 text-emerald-400" title={t.downloadedOffline}>
-              <Check size={16} className="stroke-[2.5]" />
-            </div>
-          )
-        ) : (
+        {isTrackDownloaded ? (
           <motion.button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onDownload?.();
+              if (onDeleteDownload) onDeleteDownload();
             }}
-            whileTap={{ scale: 0.85 }}
-            className="p-2 text-neutral-500 hover:text-white transition-colors cursor-pointer"
+            whileTap={{ scale: 0.9 }}
+            className="p-2 text-emerald-400 hover:text-rose-400 transition-colors cursor-pointer"
+            title={t.downloadedOffline}
+          >
+            <Download size={18} />
+          </motion.button>
+        ) : isDownloading ? (
+          <div className="p-2 text-neutral-400 animate-spin">
+            <Loader2 size={18} />
+          </div>
+        ) : onDownload ? (
+          <motion.button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDownload();
+            }}
+            whileTap={{ scale: 0.9 }}
+            className="p-2 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
             title={t.downloadTrack}
           >
-            <Download size={16} />
+            <Download size={18} />
+          </motion.button>
+        ) : null}
+
+        {onDeleteDownload && !isTrackDownloaded && (
+          <motion.button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteDownload();
+            }}
+            whileTap={{ scale: 0.9 }}
+            className="p-2 text-neutral-500 hover:text-rose-400 transition-colors cursor-pointer"
+            title={t.deleteFromDevice}
+          >
+            <Trash2 size={18} />
           </motion.button>
         )}
-
-        <span className="text-xs text-neutral-500 font-mono w-10 text-right">
-          {Math.floor(track.duration / 60)}:
-          {(track.duration % 60).toString().padStart(2, '0')}
-        </span>
       </div>
     </motion.div>
   );

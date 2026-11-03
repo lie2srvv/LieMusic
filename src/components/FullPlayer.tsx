@@ -323,7 +323,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 {isPlaying ? (
                   <Pause size={30} fill="#151313" />
                 ) : (
-                  <Play size={30} fill="#151313" className="translate-x-0.5" />
+                  <Play size={30} fill="#151313" />
                 )}
               </motion.button>
 

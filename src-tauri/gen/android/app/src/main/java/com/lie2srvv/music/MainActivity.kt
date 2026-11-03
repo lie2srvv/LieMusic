@@ -17,6 +17,8 @@ class MainActivity : TauriActivity() {
 
   companion object {
     private var webViewRef: WebView? = null
+    @Volatile
+    private var shouldInterceptBack = false
 
     fun dispatchMediaAction(action: String) {
       webViewRef?.post {
@@ -70,16 +72,38 @@ class MainActivity : TauriActivity() {
       }
       context.startService(intent)
     }
+
+    @JavascriptInterface
+    fun setBackIntercept(enabled: Boolean) {
+      shouldInterceptBack = enabled
+    }
+
+    @JavascriptInterface
+    fun exitToBackground() {
+      runOnUiThread {
+        moveTaskToBack(true)
+      }
+    }
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
 
-    // Intercept back navigation: send task to background instead of destroying Activity and killing playback!
+    // Intercept back navigation: if WebView has open overlays (FullPlayer, modal, select mode, other tab),
+    // let React dismiss them. Otherwise send task to background instead of destroying Activity!
     onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
       override fun handleOnBackPressed() {
-        moveTaskToBack(true)
+        if (shouldInterceptBack) {
+          webViewRef?.post {
+            webViewRef?.evaluateJavascript(
+              "window.dispatchEvent(new CustomEvent('android_back_pressed'));",
+              null
+            )
+          }
+        } else {
+          moveTaskToBack(true)
+        }
       }
     })
 

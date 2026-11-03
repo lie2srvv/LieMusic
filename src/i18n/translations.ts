@@ -19,6 +19,15 @@ export const translations = {
 
     // Search
     searchPlaceholder: 'Найти трек, артиста или альбом...',
+    searchTrackPlaceholder: 'Название трека...',
+    searchArtistPlaceholder: 'Исполнитель / автор...',
+    searchFilters: 'Фильтры',
+    searchSortByLabel: 'Сортировка:',
+    sortRelevance: 'По релевантности',
+    sortTitle: 'По названию (А-Я)',
+    sortArtist: 'По автору (А-Я)',
+    sortDuration: 'По длительности',
+    duplicate: 'Копия',
     allSources: 'Все источники',
     searching: 'Поиск...',
     searchEmptyTitle: 'Введите название песни или исполнителя',
@@ -173,6 +182,15 @@ export const translations = {
 
     // Search
     searchPlaceholder: 'Search tracks, artists, or albums...',
+    searchTrackPlaceholder: 'Track title...',
+    searchArtistPlaceholder: 'Artist / author...',
+    searchFilters: 'Filters',
+    searchSortByLabel: 'Sort by:',
+    sortRelevance: 'Relevance',
+    sortTitle: 'Title (A-Z)',
+    sortArtist: 'Artist (A-Z)',
+    sortDuration: 'Duration',
+    duplicate: 'Duplicate',
     allSources: 'All sources',
     searching: 'Searching...',
     searchEmptyTitle: 'Enter a song or artist name',

@@ -31,7 +31,7 @@ export async function searchYouTubeTracks(query: string): Promise<Track[]> {
   return [];
 }
 
-export async function resolveStreamUrl(track: Track): Promise<string> {
+export async function resolveStreamUrl(track: Track, forceRefresh = false): Promise<string> {
   // Check local offline storage FIRST
   try {
     const offlineAudio = await invoke<string>('get_downloaded_track_audio', {
@@ -44,14 +44,17 @@ export async function resolveStreamUrl(track: Track): Promise<string> {
     // Track not found offline, stream from remote
   }
 
-  if (track.streamUrl && !track.streamUrl.startsWith('sc_transcoding:') && !track.streamUrl.startsWith('yt_')) {
-    return track.streamUrl;
+  // If local file, return as is
+  if (track.source === 'local' || track.id.startsWith('local_')) {
+    return track.streamUrl || '';
   }
+
+  const passStreamUrl = forceRefresh ? null : track.streamUrl;
 
   try {
     const stream = await invoke<string>('resolve_stream_url_native', {
       trackId: track.id,
-      streamUrl: track.streamUrl || null,
+      streamUrl: passStreamUrl || null,
       source: track.source,
     });
     if (stream && stream.length > 0) {

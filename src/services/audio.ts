@@ -28,9 +28,11 @@ class AudioEngine {
   private onTrackEndCallbacks: AudioCallback[] = [];
   private onTimeUpdateCallbacks: TimeCallback[] = [];
   private onPlayStateChangeCallbacks: ((isPlaying: boolean) => void)[] = [];
+  private onErrorCallbacks: ((error: any) => void)[] = [];
   private onNextCallback: (() => void) | null = null;
   private onPrevCallback: (() => void) | null = null;
 
+  private playPromise: Promise<void> | null = null;
   private isInitialized = false;
 
   constructor() {
@@ -56,6 +58,17 @@ class AudioEngine {
       this.onPlayStateChangeCallbacks.forEach((cb) => cb(false));
       this.updateMediaSession();
       this.syncAndroidNotification(false);
+    });
+
+    this.audio.addEventListener('error', () => {
+      console.warn('[LieMusic] HTMLAudioElement error event:', this.audio.error);
+      this.onPlayStateChangeCallbacks.forEach((cb) => cb(false));
+      this.onErrorCallbacks.forEach((cb) => cb(this.audio.error));
+      this.syncAndroidNotification(false);
+    });
+
+    this.audio.addEventListener('stalled', () => {
+      console.warn('[LieMusic] HTMLAudioElement playback stalled');
     });
 
     this.setupMediaSessionHandlers();
@@ -162,7 +175,11 @@ class AudioEngine {
     this.initAudioNodes();
 
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      await this.audioCtx.resume().catch(console.error);
+      try {
+        await this.audioCtx.resume();
+      } catch (e) {
+        console.warn('[LieMusic] AudioContext resume error:', e);
+      }
     }
 
     // Set anonymous CORS so Web Audio API MediaElementSource does NOT silence the audio!
@@ -176,9 +193,15 @@ class AudioEngine {
     this.audio.load();
 
     try {
-      await this.audio.play();
-    } catch (err) {
-      console.error('[LieMusic] Playback error:', err);
+      this.playPromise = this.audio.play();
+      await this.playPromise;
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error('[LieMusic] Playback error in playTrack:', err);
+        this.onErrorCallbacks.forEach((cb) => cb(err));
+      }
+    } finally {
+      this.playPromise = null;
     }
 
     this.updateMediaSession();
@@ -190,6 +213,7 @@ class AudioEngine {
    * Prevents previous track from playing while a new track stream is resolving.
    */
   public stop() {
+    this.playPromise = null;
     this.audio.pause();
     this.audio.currentTime = 0;
     this.audio.removeAttribute('src');
@@ -199,21 +223,55 @@ class AudioEngine {
     this.syncAndroidNotification(false);
   }
 
-  public togglePlayPause() {
+  public async togglePlayPause(): Promise<boolean> {
     if (this.audio.paused) {
       this.initAudioNodes();
       if (this.audioCtx && this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume().catch(console.error);
+        try {
+          await this.audioCtx.resume();
+        } catch (e) {
+          console.warn('[LieMusic] AudioContext resume error:', e);
+        }
       }
-      this.audio.play().catch(console.error);
-      this.syncAndroidNotification(true);
+
+      if (this.audio.error || !this.audio.src || this.audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+        console.warn('[LieMusic] togglePlayPause: audio has error or no source');
+        this.onErrorCallbacks.forEach((cb) => cb(this.audio.error || new Error('No audio source')));
+        return false;
+      }
+
+      try {
+        this.playPromise = this.audio.play();
+        await this.playPromise;
+        this.syncAndroidNotification(true);
+        return true;
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('[LieMusic] Playback error in togglePlayPause:', err);
+          this.onErrorCallbacks.forEach((cb) => cb(err));
+        }
+        return false;
+      } finally {
+        this.playPromise = null;
+      }
     } else {
+      if (this.playPromise) {
+        try {
+          await this.playPromise;
+        } catch {}
+      }
       this.audio.pause();
       this.syncAndroidNotification(false);
+      return false;
     }
   }
 
-  public pause() {
+  public async pause() {
+    if (this.playPromise) {
+      try {
+        await this.playPromise;
+      } catch {}
+    }
     this.audio.pause();
     this.syncAndroidNotification(false);
   }
@@ -272,6 +330,14 @@ class AudioEngine {
 
   public isPlaying(): boolean {
     return !this.audio.paused;
+  }
+
+  public hasError(): boolean {
+    return !!this.audio.error;
+  }
+
+  public hasSource(): boolean {
+    return !!this.audio.src && this.audio.networkState !== HTMLMediaElement.NETWORK_NO_SOURCE;
   }
 
   private updateMediaSession() {
@@ -349,6 +415,13 @@ class AudioEngine {
     this.onPlayStateChangeCallbacks.push(cb);
     return () => {
       this.onPlayStateChangeCallbacks = this.onPlayStateChangeCallbacks.filter((c) => c !== cb);
+    };
+  }
+
+  public onError(cb: (error: any) => void) {
+    this.onErrorCallbacks.push(cb);
+    return () => {
+      this.onErrorCallbacks = this.onErrorCallbacks.filter((c) => c !== cb);
     };
   }
 }

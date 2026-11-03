@@ -14,6 +14,7 @@ import {
   ChevronUp,
   Download,
   FolderPlus,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { CellularDownloadModal } from './components/CellularDownloadModal';
@@ -95,9 +96,13 @@ export const App: React.FC = () => {
   );
 
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchArtistQuery, setSearchArtistQuery] = useState<string>('');
+  const [isFilterExpanded, setIsFilterExpanded] = useState<boolean>(false);
+  const [searchSortBy, setSearchSortBy] = useState<'relevance' | 'title' | 'artist' | 'duration'>('relevance');
   const [searchSource, setSearchSource] = useState<AudioSource | 'all'>('all');
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const lastErrorRetryTrackId = useRef<string | null>(null);
 
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState<boolean>(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState<boolean>(false);
@@ -121,6 +126,106 @@ export const App: React.FC = () => {
   // Dialog prompts
   const [deletePrompt, setDeletePrompt] = useState<{ trackIds: string[]; trackTitle?: string } | null>(null);
   const [cellularPrompt, setCellularPrompt] = useState<{ tracks: Track[] } | null>(null);
+
+  const canGoBack = Boolean(
+    isFullPlayerOpen ||
+    isEqualizerOpen ||
+    isSettingsOpen ||
+    isLanguageModalOpen ||
+    cellularPrompt ||
+    deletePrompt ||
+    isOfflineSelectMode ||
+    isFavSelectMode ||
+    activeTab !== 'home'
+  );
+
+  useEffect(() => {
+    try {
+      (window as any).AndroidMediaNotification?.setBackIntercept(canGoBack);
+    } catch {}
+  }, [canGoBack]);
+
+  useEffect(() => {
+    const handleBackPressed = () => {
+      if (deletePrompt) {
+        setDeletePrompt(null);
+        return;
+      }
+      if (cellularPrompt) {
+        setCellularPrompt(null);
+        return;
+      }
+      if (isLanguageModalOpen) {
+        setIsLanguageModalOpen(false);
+        return;
+      }
+      if (isEqualizerOpen) {
+        setIsEqualizerOpen(false);
+        return;
+      }
+      if (isSettingsOpen) {
+        setIsSettingsOpen(false);
+        return;
+      }
+      if (isFavSelectMode) {
+        setIsFavSelectMode(false);
+        setSelectedFavIds(new Set());
+        return;
+      }
+      if (isOfflineSelectMode) {
+        setIsOfflineSelectMode(false);
+        setSelectedOfflineIds(new Set());
+        return;
+      }
+      if (isFullPlayerOpen) {
+        setIsFullPlayerOpen(false);
+        return;
+      }
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        return;
+      }
+      try {
+        (window as any).AndroidMediaNotification?.exitToBackground();
+      } catch {}
+    };
+
+    window.addEventListener('android_back_pressed', handleBackPressed);
+    return () => {
+      window.removeEventListener('android_back_pressed', handleBackPressed);
+    };
+  }, [
+    deletePrompt,
+    cellularPrompt,
+    isLanguageModalOpen,
+    isEqualizerOpen,
+    isSettingsOpen,
+    isFavSelectMode,
+    isOfflineSelectMode,
+    isFullPlayerOpen,
+    activeTab,
+  ]);
+
+  useEffect(() => {
+    const unError = audioEngine.onError((err) => {
+      console.warn('[LieMusic] Audio engine error caught in App:', err);
+      if (currentTrack && lastErrorRetryTrackId.current !== currentTrack.id) {
+        lastErrorRetryTrackId.current = currentTrack.id;
+        console.log('[LieMusic] Auto-retrying playback with freshly resolved stream URL...');
+        resolveStreamUrl(currentTrack, true)
+          .then((freshUrl) => {
+            if (freshUrl) {
+              audioEngine.playTrack(currentTrack, freshUrl).catch(console.error);
+            }
+          })
+          .catch(console.error);
+      }
+    });
+
+    return () => {
+      unError();
+    };
+  }, [currentTrack]);
 
   useEffect(() => {
     const cachedFavs = localStorage.getItem('liemusic_favorites');
@@ -161,8 +266,9 @@ export const App: React.FC = () => {
   }, [downloadedTracks]);
 
   const handlePlayTrack = useCallback(
-    async (rawTrack: Track, newQueue?: Track[]) => {
+    async (rawTrack: Track, newQueue?: Track[], forceRefresh = false) => {
       const track: Track = { ...rawTrack, thumbnail: getHighResThumbnail(rawTrack.thumbnail) };
+      lastErrorRetryTrackId.current = null;
       // Instantly stop previous playing track
       audioEngine.stop();
       setIsPlaying(false);
@@ -186,7 +292,7 @@ export const App: React.FC = () => {
       setHistory((prev) => [track, ...prev.filter((t) => t.id !== track.id)].slice(0, 100));
 
       try {
-        const streamUrl = await resolveStreamUrl(track);
+        const streamUrl = await resolveStreamUrl(track, forceRefresh);
         if (streamUrl) {
           await audioEngine.playTrack(track, streamUrl);
         }
@@ -248,11 +354,23 @@ export const App: React.FC = () => {
     };
   }, [handleNextTrack]);
 
-  const handleTogglePlay = () => {
+  const handleTogglePlay = async () => {
     if (!currentTrack && queue.length > 0) {
       handlePlayTrack(queue[0]);
-    } else {
-      audioEngine.togglePlayPause();
+      return;
+    }
+    if (!currentTrack) return;
+
+    if (audioEngine.hasError() || !audioEngine.hasSource()) {
+      console.log('[LieMusic] Re-resolving stream on toggle play due to error/missing source...');
+      handlePlayTrack(currentTrack, undefined, true);
+      return;
+    }
+
+    const ok = await audioEngine.togglePlayPause();
+    if (!ok && !audioEngine.isPlaying() && (audioEngine.hasError() || !audioEngine.hasSource())) {
+      console.log('[LieMusic] Toggle play returned false with error/missing source, re-resolving...');
+      handlePlayTrack(currentTrack, undefined, true);
     }
   };
 
@@ -441,77 +559,167 @@ export const App: React.FC = () => {
     e.target.value = '';
   };
 
-  const executeSearch = useCallback(async (query: string, source: AudioSource | 'all') => {
-    const clean = query.trim();
-    if (!clean) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
+  const executeSearch = useCallback(
+    async (
+      titleQuery: string,
+      artistQuery: string,
+      source: AudioSource | 'all',
+      sortBy: 'relevance' | 'title' | 'artist' | 'duration'
+    ) => {
+      const cleanTitle = titleQuery.trim();
+      const cleanArtist = artistQuery.trim();
 
-    const currentReqId = ++searchRequestId.current;
-    setIsSearching(true);
-
-    try {
-      let combined: Track[] = [];
-
-      if (source === 'all') {
-        const [ytResults, scResults] = await Promise.all([
-          searchYouTubeTracks(clean),
-          searchSoundCloudTracks(clean),
-        ]);
-        if (searchRequestId.current !== currentReqId) return;
-        const maxLen = Math.max(ytResults.length, scResults.length);
-        for (let i = 0; i < maxLen; i++) {
-          if (ytResults[i]) combined.push(ytResults[i]);
-          if (scResults[i]) combined.push(scResults[i]);
-        }
-      } else if (source === 'youtube') {
-        combined = await searchYouTubeTracks(clean);
-      } else {
-        combined = await searchSoundCloudTracks(clean);
-      }
-
-      if (searchRequestId.current === currentReqId) {
-        setSearchResults(combined);
-      }
-    } catch (err) {
-      if (searchRequestId.current === currentReqId) {
-        console.error('[LieMusic] Search error:', err);
+      if (!cleanTitle && !cleanArtist) {
         setSearchResults([]);
-      }
-    } finally {
-      if (searchRequestId.current === currentReqId) {
         setIsSearching(false);
+        return;
       }
-    }
-  }, []);
 
-  const handleSearchInput = (value: string) => {
-    setSearchQuery(value);
+      const combinedQuery = cleanTitle && cleanArtist
+        ? `${cleanTitle} ${cleanArtist}`
+        : cleanTitle || cleanArtist;
+
+      const currentReqId = ++searchRequestId.current;
+      setIsSearching(true);
+
+      try {
+        let combined: Track[] = [];
+
+        if (source === 'all') {
+          const [ytResults, scResults] = await Promise.all([
+            searchYouTubeTracks(combinedQuery),
+            searchSoundCloudTracks(combinedQuery),
+          ]);
+          if (searchRequestId.current !== currentReqId) return;
+          const maxLen = Math.max(ytResults.length, scResults.length);
+          for (let i = 0; i < maxLen; i++) {
+            if (ytResults[i]) combined.push(ytResults[i]);
+            if (scResults[i]) combined.push(scResults[i]);
+          }
+        } else if (source === 'youtube') {
+          combined = await searchYouTubeTracks(combinedQuery);
+        } else {
+          combined = await searchSoundCloudTracks(combinedQuery);
+        }
+
+        if (searchRequestId.current !== currentReqId) return;
+
+        let filtered = combined;
+        if (cleanArtist) {
+          const aLower = cleanArtist.toLowerCase();
+          filtered = filtered.filter(
+            (t) =>
+              t.artist.toLowerCase().includes(aLower) ||
+              t.title.toLowerCase().includes(aLower)
+          );
+        }
+
+        if (sortBy === 'title') {
+          filtered.sort((a, b) => a.title.localeCompare(b.title));
+        } else if (sortBy === 'artist') {
+          filtered.sort((a, b) => a.artist.localeCompare(b.artist));
+        } else if (sortBy === 'duration') {
+          filtered.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+        }
+
+        setSearchResults(filtered);
+      } catch (err) {
+        if (searchRequestId.current === currentReqId) {
+          console.error('[LieMusic] Search error:', err);
+          setSearchResults([]);
+        }
+      } finally {
+        if (searchRequestId.current === currentReqId) {
+          setIsSearching(false);
+        }
+      }
+    },
+    []
+  );
+
+  const triggerDebouncedSearch = (
+    title: string,
+    artist: string,
+    source: AudioSource | 'all',
+    sort: 'relevance' | 'title' | 'artist' | 'duration'
+  ) => {
     if (searchDebounceTimer.current) {
       clearTimeout(searchDebounceTimer.current);
     }
-    if (!value.trim()) {
+    if (!title.trim() && !artist.trim()) {
       searchRequestId.current++;
       setSearchResults([]);
       setIsSearching(false);
       return;
     }
     searchDebounceTimer.current = setTimeout(() => {
-      executeSearch(value, searchSource);
+      executeSearch(title, artist, source, sort);
     }, 280);
   };
 
   const handleSourceChange = (newSource: AudioSource | 'all') => {
     setSearchSource(newSource);
-    if (searchDebounceTimer.current) {
-      clearTimeout(searchDebounceTimer.current);
-    }
-    if (searchQuery.trim()) {
-      executeSearch(searchQuery, newSource);
-    }
+    triggerDebouncedSearch(searchQuery, searchArtistQuery, newSource, searchSortBy);
   };
+
+  const processedSearchResults = useMemo(() => {
+    if (searchResults.length === 0) return [];
+
+    const normalizeTitle = (str: string) =>
+      str
+        .toLowerCase()
+        .replace(/\s*[\(\[](official|audio|video|lyrics|hd|4k|remastered|visualizer)[\)\]]/gi, '')
+        .trim();
+
+    const groups = new Map<string, Track[]>();
+    for (const track of searchResults) {
+      const norm = normalizeTitle(track.title);
+      if (!groups.has(norm)) {
+        groups.set(norm, []);
+      }
+      groups.get(norm)!.push(track);
+    }
+
+    const dimmedSet = new Set<string>();
+
+    for (const [, tracksInGroup] of groups.entries()) {
+      if (tracksInGroup.length <= 1) continue;
+
+      const hasLikedOrDownloaded = tracksInGroup.some(
+        (t) => favoriteTrackIds.has(t.id) || downloadedTrackIds.has(t.id)
+      );
+
+      if (hasLikedOrDownloaded) {
+        let bestTrack = tracksInGroup[0];
+        let bestScore = -1;
+
+        for (const track of tracksInGroup) {
+          const isFav = favoriteTrackIds.has(track.id);
+          const isDl = downloadedTrackIds.has(track.id);
+          let score = 0;
+          if (isFav && isDl) score = 3;
+          else if (isDl) score = 2;
+          else if (isFav) score = 1;
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestTrack = track;
+          }
+        }
+
+        for (const track of tracksInGroup) {
+          if (track.id !== bestTrack.id) {
+            dimmedSet.add(track.id);
+          }
+        }
+      }
+    }
+
+    return searchResults.map((track) => ({
+      track,
+      isDimmed: dimmedSet.has(track.id),
+    }));
+  }, [searchResults, favoriteTrackIds, downloadedTrackIds]);
 
   const isCurrentFavorite = currentTrack ? favoriteTrackIds.has(currentTrack.id) : false;
 
@@ -627,7 +835,7 @@ export const App: React.FC = () => {
                       }}
                       className="w-7 h-7 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg active:scale-90"
                     >
-                      <Play size={12} fill="currentColor" className="translate-x-0.5" />
+                      <Play size={12} fill="currentColor" />
                     </button>
                   )}
                 </div>
@@ -651,7 +859,7 @@ export const App: React.FC = () => {
                       }}
                       className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:scale-90"
                     >
-                      <Play size={12} fill="currentColor" className="translate-x-0.5" />
+                      <Play size={12} fill="currentColor" />
                     </button>
                   )}
                 </div>
@@ -719,17 +927,100 @@ export const App: React.FC = () => {
 
         {/* TAB 2: SEARCH */}
         {activeTab === 'search' && (
-          <div className="max-w-xl mx-auto space-y-4">
-            <div className="relative">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearchInput(e.target.value)}
-                placeholder={t.searchPlaceholder}
-                className="w-full bg-[#1D1B1B] border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all shadow-inner"
-                autoFocus
-              />
+          <div className="max-w-xl mx-auto space-y-3">
+            {/* Search Input Bar with Filter Button */}
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <div className="relative flex-1">
+                  <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSearchQuery(val);
+                      triggerDebouncedSearch(val, searchArtistQuery, searchSource, searchSortBy);
+                    }}
+                    placeholder={isFilterExpanded ? t.searchTrackPlaceholder : t.searchPlaceholder}
+                    className="w-full bg-[#1D1B1B] border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all shadow-inner"
+                    autoFocus
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                    isFilterExpanded || searchArtistQuery.trim() || searchSortBy !== 'relevance'
+                      ? 'bg-white text-black border-white shadow'
+                      : 'bg-[#1D1B1B] border-white/10 text-neutral-400 hover:text-white'
+                  }`}
+                  title={t.searchFilters}
+                >
+                  <SlidersHorizontal size={18} />
+                </button>
+              </div>
+
+              {/* Expandable Advanced Filter Panel */}
+              <AnimatePresence>
+                {isFilterExpanded && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-3 bg-[#1D1B1B] border border-white/10 rounded-2xl space-y-3">
+                      <div>
+                        <label className="text-[11px] font-medium text-neutral-400 block mb-1">
+                          {t.searchArtistPlaceholder}
+                        </label>
+                        <input
+                          type="text"
+                          value={searchArtistQuery}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSearchArtistQuery(val);
+                            triggerDebouncedSearch(searchQuery, val, searchSource, searchSortBy);
+                          }}
+                          placeholder={t.searchArtistPlaceholder}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-medium text-neutral-400 block mb-1.5">
+                          {t.searchSortByLabel}
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { id: 'relevance', label: t.sortRelevance },
+                            { id: 'title', label: t.sortTitle },
+                            { id: 'artist', label: t.sortArtist },
+                            { id: 'duration', label: t.sortDuration },
+                          ].map((sortOption) => (
+                            <button
+                              key={sortOption.id}
+                              type="button"
+                              onClick={() => {
+                                const newSort = sortOption.id as any;
+                                setSearchSortBy(newSort);
+                                triggerDebouncedSearch(searchQuery, searchArtistQuery, searchSource, newSort);
+                              }}
+                              className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                                searchSortBy === sortOption.id
+                                  ? 'bg-white text-black border-white font-semibold'
+                                  : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
+                              }`}
+                            >
+                              {sortOption.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Source Switcher Pills */}
@@ -760,12 +1051,13 @@ export const App: React.FC = () => {
                   <Disc3 size={32} className="animate-spin text-neutral-500" />
                   <p className="text-xs">{t.searching}</p>
                 </div>
-              ) : searchResults.length > 0 ? (
-                searchResults.map((track) => (
+              ) : processedSearchResults.length > 0 ? (
+                processedSearchResults.map(({ track, isDimmed }) => (
                   <TrackListItem
-                        language={language}
+                    language={language}
                     key={track.id}
                     track={track}
+                    isDimmed={isDimmed}
                     isCurrent={currentTrack?.id === track.id}
                     isPlaying={isPlaying}
                     isFavorite={favoriteTrackIds.has(track.id)}
@@ -778,7 +1070,7 @@ export const App: React.FC = () => {
                     onDownload={() => requestDownloadTrack(track)}
                   />
                 ))
-              ) : searchQuery ? (
+              ) : searchQuery || searchArtistQuery ? (
                 <div className="py-20 text-center text-neutral-500">
                   <p className="text-sm">{t.searchNoResults}</p>
                 </div>

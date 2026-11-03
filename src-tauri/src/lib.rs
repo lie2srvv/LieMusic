@@ -481,20 +481,59 @@ async fn resolve_stream_url_native(
         .build()
         .map_err(|e| e.to_string())?;
 
-    // 1. If SoundCloud transcoding URL
-    if let Some(ref url) = stream_url {
-        if url.starts_with("sc_transcoding:") {
-            let actual_url = url.replace("sc_transcoding:", "");
-            let sc_fetch = format!("{}?client_id=2yeWkbX88QhTzS3OtZp8cLGaJRrOAWwF", actual_url);
-            if let Ok(res) = client.get(&sc_fetch).send().await {
-                if let Ok(data) = res.json::<serde_json::Value>().await {
-                    if let Some(media_url) = data.get("url").and_then(|u| u.as_str()) {
-                        return Ok(media_url.to_string());
+    let is_sc = source == "soundcloud" || track_id.starts_with("sc_") || stream_url.as_ref().map_or(false, |u| u.starts_with("sc_transcoding:"));
+
+    // 1. If SoundCloud track
+    if is_sc {
+        let sc_client_id = "2yeWkbX88QhTzS3OtZp8cLGaJRrOAWwF";
+
+        if let Some(ref url) = stream_url {
+            if url.starts_with("sc_transcoding:") {
+                let actual_url = url.replace("sc_transcoding:", "");
+                let sc_fetch = format!("{}?client_id={}", actual_url, sc_client_id);
+                if let Ok(res) = client.get(&sc_fetch).send().await {
+                    if let Ok(data) = res.json::<serde_json::Value>().await {
+                        if let Some(media_url) = data.get("url").and_then(|u| u.as_str()) {
+                            return Ok(media_url.to_string());
+                        }
                     }
                 }
             }
-        } else if !url.is_empty() && !url.starts_with("yt_") {
-            return Ok(url.clone());
+        }
+
+        // Fetch track transcodings by SoundCloud numeric ID
+        let numeric_id = track_id.replace("sc_", "");
+        if !numeric_id.is_empty() {
+            let sc_track_url = format!(
+                "https://api-v2.soundcloud.com/tracks/{}?client_id={}",
+                numeric_id, sc_client_id
+            );
+            if let Ok(res) = client.get(&sc_track_url).send().await {
+                if let Ok(data) = res.json::<serde_json::Value>().await {
+                    if let Some(transcodings) = data.get("media").and_then(|m| m.get("transcodings")).and_then(|t| t.as_array()) {
+                        let selected_tc = transcodings.iter().find(|tc| {
+                            tc.get("format").and_then(|f| f.get("protocol")).and_then(|p| p.as_str()) == Some("progressive")
+                        }).or_else(|| transcodings.first());
+
+                        if let Some(tc_url) = selected_tc.and_then(|tc| tc.get("url")).and_then(|u| u.as_str()) {
+                            let sc_fetch = format!("{}?client_id={}", tc_url, sc_client_id);
+                            if let Ok(m_res) = client.get(&sc_fetch).send().await {
+                                if let Ok(m_data) = m_res.json::<serde_json::Value>().await {
+                                    if let Some(media_url) = m_data.get("url").and_then(|u| u.as_str()) {
+                                        return Ok(media_url.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(ref url) = stream_url {
+            if !url.is_empty() && !url.starts_with("sc_transcoding:") && !url.starts_with("yt_") {
+                return Ok(url.clone());
+            }
         }
     }
 
@@ -526,6 +565,12 @@ async fn resolve_stream_url_native(
             "https://yt.chocolatemoo53.com/latest_version?id={}&itag=140&local=true",
             video_id
         ));
+    }
+
+    if let Some(ref url) = stream_url {
+        if !url.is_empty() {
+            return Ok(url.clone());
+        }
     }
 
     Ok("https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3".into())

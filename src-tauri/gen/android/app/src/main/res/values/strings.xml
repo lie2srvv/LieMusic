@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">"liemusic"</string>
-    <string name="main_activity_title">"liemusic"</string>
+    <string name="app_name">LieMusic</string>
+    <string name="main_activity_title">LieMusic</string>
 </resources>

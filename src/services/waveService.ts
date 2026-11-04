@@ -26,8 +26,78 @@ function parseDurationSeconds(durationStr: string | number): number {
   return 180;
 }
 
+/**
+ * Distributes tracks evenly so that:
+ * 1. No single artist exceeds maxPerArtist (default 2)
+ * 2. Tracks from the same artist are interleaved round-robin, never playing consecutively
+ * 3. Artists skipped recently are deprioritized / placed on cooldown
+ */
+export function diversifyAndInterleaveTracks(
+  tracks: Track[],
+  options?: {
+    maxPerArtist?: number;
+    skippedArtists?: Map<string, number>;
+    cooldownMs?: number;
+  }
+): Track[] {
+  const maxPerArtist = options?.maxPerArtist ?? 2;
+  const cooldownMs = options?.cooldownMs ?? 15 * 60 * 1000; // 15 minutes cooldown
+  const now = Date.now();
+
+  // 1. Filter out recently skipped artists if we have enough other tracks
+  let eligibleTracks = tracks;
+  if (options?.skippedArtists && options.skippedArtists.size > 0) {
+    const nonSkipped = tracks.filter((t) => {
+      const key = t.artist.toLowerCase().trim();
+      const skipTime = options.skippedArtists?.get(key);
+      if (!skipTime) return true;
+      return now - skipTime > cooldownMs;
+    });
+
+    // Only exclude if we still have at least 4 candidate tracks
+    if (nonSkipped.length >= 4) {
+      eligibleTracks = nonSkipped;
+    }
+  }
+
+  // 2. Group tracks by normalized artist name
+  const artistGroups = new Map<string, Track[]>();
+  for (const track of eligibleTracks) {
+    const key = track.artist.toLowerCase().trim();
+    if (!artistGroups.has(key)) {
+      artistGroups.set(key, []);
+    }
+    const group = artistGroups.get(key)!;
+    if (group.length < maxPerArtist) {
+      group.push(track);
+    }
+  }
+
+  // 3. Interleave tracks round-robin across artists
+  // Shuffle keys so order is not biased to whatever API returned first
+  const artistKeys = Array.from(artistGroups.keys()).sort(() => Math.random() - 0.5);
+  const result: Track[] = [];
+  let round = 0;
+  let addedAny = true;
+
+  while (addedAny && round < maxPerArtist) {
+    addedAny = false;
+    for (const key of artistKeys) {
+      const list = artistGroups.get(key)!;
+      if (round < list.length) {
+        result.push(list[round]);
+        addedAny = true;
+      }
+    }
+    round++;
+  }
+
+  return result;
+}
+
 export class WaveService {
   private playedIds = new Set<string>();
+  private skippedArtists = new Map<string, number>(); // artistNorm -> timestamp
   private currentMood: MoodCoordinates = { valence: 0, energy: 0 };
   private currentMode: 'favorites' | 'discover' = 'favorites';
   private currentLanguage: WaveLanguageFilter = 'ru_en';
@@ -59,8 +129,21 @@ export class WaveService {
     }
   }
 
+  /**
+   * Called when a track is explicitly skipped by the user in wave mode.
+   * Records the track as played and puts the artist on skip-cooldown.
+   */
+  public recordSkip(trackId: string, artist: string) {
+    this.markTrackPlayed(trackId);
+    const key = artist.toLowerCase().trim();
+    if (key) {
+      this.skippedArtists.set(key, Date.now());
+    }
+  }
+
   public clearSession() {
     this.playedIds.clear();
+    this.skippedArtists.clear();
   }
 
   /**
@@ -199,7 +282,7 @@ export class WaveService {
       if (isRu) {
         return [
           'Сироткин',
-          ' Zoloto песни',
+          'Zoloto песни',
           'Therr Maitz',
           'русский инди поп уют',
           'Антоха МС',
@@ -227,6 +310,7 @@ export class WaveService {
    * 2. Gather candidates from seeds (SC related & YTM radio)
    * 3. Inject loved tracks periodically in 'favorites' mode
    * 4. Apply language, duration, anti-mix filters
+   * 5. Enforce strict artist diversification (max 2 per artist, round-robin interleaving)
    */
   public async getNextRecommendations(options: {
     seeds: Track[];
@@ -279,17 +363,20 @@ export class WaveService {
       }
     }
 
-    // 2. If pool is too small, fetch by smart quadrant queries
+    // 2. Multi-query search: pick 2-3 distinct queries to ensure artist diversity
     if (candidatePool.length < targetCount * 2) {
       const queries = this.getQuadrantQueries(mood, lang, hasRussianSeeds);
-      const chosenQuery = queries[Math.floor(Math.random() * queries.length)];
+      const chosenQueries = [...queries].sort(() => Math.random() - 0.5).slice(0, 3);
 
-      const [scResults, ytResults] = await Promise.all([
-        searchSoundCloudTracks(chosenQuery).catch(() => []),
-        searchYouTubeTracks(chosenQuery).catch(() => []),
+      const searchPromises = chosenQueries.flatMap((q) => [
+        searchSoundCloudTracks(q).catch(() => []),
+        searchYouTubeTracks(q).catch(() => []),
       ]);
 
-      candidatePool.push(...scResults, ...ytResults);
+      const searchResults = await Promise.all(searchPromises);
+      for (const batch of searchResults) {
+        candidatePool.push(...batch);
+      }
     }
 
     // 3. Exclusions
@@ -302,7 +389,7 @@ export class WaveService {
       );
     }
 
-    // 4. Sanitize and filter
+    // 4. Sanitize and filter (duration, language, stop patterns, beats)
     const filtered = sanitizeAndFilterTracks(candidatePool, {
       maxDuration: 600, // 10 minutes maximum
       minDuration: 45, // 45 seconds minimum
@@ -314,10 +401,17 @@ export class WaveService {
       filterBeats: !userLikesBeats,
     });
 
-    // 5. Apply user custom metadata
-    const finalTracks = applyCustomMetadataList(filtered);
+    // 5. Enforce artist diversity: max 2 per artist, round-robin interleaving, skip cooldown
+    const diversified = diversifyAndInterleaveTracks(filtered, {
+      maxPerArtist: 2,
+      skippedArtists: this.skippedArtists,
+      cooldownMs: 15 * 60 * 1000,
+    });
 
-    // 6. Return target count
+    // 6. Apply user custom metadata
+    const finalTracks = applyCustomMetadataList(diversified);
+
+    // 7. Return target count
     return finalTracks.slice(0, targetCount);
   }
 }

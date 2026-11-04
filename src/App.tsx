@@ -401,56 +401,80 @@ export const App: React.FC = () => {
     [queue]
   );
 
-  const handleNextTrack = useCallback(() => {
-    if (!currentTrack) return;
-    if (isRepeat) {
-      audioEngine.seek(0);
-      audioEngine.togglePlayPause();
-      return;
-    }
-
-    // 1. Check priority UpNext queue first
-    if (upNextQueue.length > 0) {
-      const nextUpTrack = upNextQueue[0];
-      setUpNextQueue((prev) => prev.slice(1));
-      handlePlayTrack(nextUpTrack);
-      return;
-    }
-
-    if (queue.length === 0) return;
-
-    let nextIndex: number;
-    if (isShuffle) {
-      nextIndex = Math.floor(Math.random() * queue.length);
-    } else {
-      const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
-      nextIndex = (currentIndex + 1) % queue.length;
-    }
-
-    if (isWaveActive) {
-      waveService.markTrackPlayed(currentTrack.id);
-      const remaining = queue.length - nextIndex;
-      if (remaining <= 3) {
-        waveService
-          .getNextRecommendations({
-            seeds: [currentTrack, ...favorites],
-            favoriteTracks: favorites,
-            mood: waveMood,
-            mode: waveMode,
-            language: waveLanguage,
-            count: 8,
-          })
-          .then((newBatch) => {
-            if (newBatch.length > 0) {
-              setQueue((prev) => [...prev, ...newBatch]);
-            }
-          })
-          .catch(() => {});
+  const handleNextTrack = useCallback(
+    (isManualSkip = true) => {
+      if (!currentTrack) return;
+      if (isRepeat) {
+        audioEngine.seek(0);
+        audioEngine.togglePlayPause();
+        return;
       }
-    }
 
-    handlePlayTrack(queue[nextIndex]);
-  }, [currentTrack, queue, upNextQueue, isRepeat, isShuffle, isWaveActive, favorites, waveMood, waveMode, waveLanguage, handlePlayTrack]);
+      // 1. Check priority UpNext queue first
+      if (upNextQueue.length > 0) {
+        const nextUpTrack = upNextQueue[0];
+        setUpNextQueue((prev) => prev.slice(1));
+        handlePlayTrack(nextUpTrack);
+        return;
+      }
+
+      if (queue.length === 0) return;
+
+      const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
+      const currentArtist = currentTrack.artist.toLowerCase().trim();
+
+      let nextIndex: number;
+      if (isShuffle) {
+        nextIndex = Math.floor(Math.random() * queue.length);
+      } else {
+        nextIndex = (currentIndex + 1) % queue.length;
+      }
+
+      if (isWaveActive) {
+        if (isManualSkip) {
+          // Explicit skip: record skip and cooldown this artist in wave
+          waveService.recordSkip(currentTrack.id, currentTrack.artist);
+
+          // "если скипается, то всё, дальше" -> skip any immediate consecutive track from the same author
+          let jumpIndex = nextIndex;
+          let searched = 0;
+          while (
+            searched < queue.length &&
+            queue[jumpIndex].artist.toLowerCase().trim() === currentArtist
+          ) {
+            waveService.markTrackPlayed(queue[jumpIndex].id);
+            jumpIndex = (jumpIndex + 1) % queue.length;
+            searched++;
+          }
+          nextIndex = jumpIndex;
+        } else {
+          waveService.markTrackPlayed(currentTrack.id);
+        }
+
+        const remaining = queue.length - nextIndex;
+        if (remaining <= 3) {
+          waveService
+            .getNextRecommendations({
+              seeds: [currentTrack, ...favorites],
+              favoriteTracks: favorites,
+              mood: waveMood,
+              mode: waveMode,
+              language: waveLanguage,
+              count: 8,
+            })
+            .then((newBatch) => {
+              if (newBatch.length > 0) {
+                setQueue((prev) => [...prev, ...newBatch]);
+              }
+            })
+            .catch(() => {});
+        }
+      }
+
+      handlePlayTrack(queue[nextIndex]);
+    },
+    [currentTrack, queue, upNextQueue, isRepeat, isShuffle, isWaveActive, favorites, waveMood, waveMode, waveLanguage, handlePlayTrack]
+  );
 
     const handleSaveTrackMetadata = useCallback(
     ({ title, artist, thumbnail }: { title: string; artist: string; thumbnail?: string }) => {
@@ -575,7 +599,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     audioEngine.setActionHandlers({
-      onNext: handleNextTrack,
+      onNext: () => handleNextTrack(true),
       onPrev: handlePrevTrack,
     });
   }, [handleNextTrack, handlePrevTrack]);
@@ -586,7 +610,7 @@ export const App: React.FC = () => {
       setCurrentTime(curr);
       setDuration(dur);
     });
-    const unEnd = audioEngine.onTrackEnd(() => handleNextTrack());
+    const unEnd = audioEngine.onTrackEnd(() => handleNextTrack(false));
 
     return () => {
       unPlay();

@@ -221,7 +221,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-white tracking-tight">{t.settings}</h2>
-                  <p className="text-[10px] text-neutral-400">LieMusic v1.0.2</p>
+                  <p className="text-[10px] text-neutral-400">LieMusic v1.0.3</p>
                 </div>
               </div>
               <button
@@ -580,7 +580,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-white tracking-tight">LieMusic</h4>
-                    <p className="text-[11px] text-neutral-400">v1.0.0 (Release) · Tauri 2.0</p>
+                    <p className="text-[11px] text-neutral-400">v1.0.3 (Release) · Tauri 2.0</p>
                   </div>
                 </div>
 

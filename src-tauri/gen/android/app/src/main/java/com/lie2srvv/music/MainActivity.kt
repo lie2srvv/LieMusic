@@ -126,6 +126,7 @@ class MainActivity : TauriActivity() {
     webView.settings.mediaPlaybackRequiresUserGesture = false
     webView.settings.domStorageEnabled = true
     webView.settings.databaseEnabled = true
+    WebView.setWebContentsDebuggingEnabled(true)
     webView.addJavascriptInterface(MediaNotificationBridge(this), "AndroidMediaNotification")
   }
 

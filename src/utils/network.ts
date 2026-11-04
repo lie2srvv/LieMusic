@@ -12,3 +12,18 @@ export function isCellularConnection(): boolean {
   }
   return false;
 }
+
+export function isOfflineModeEnabled(): boolean {
+  try {
+    return localStorage.getItem('liemusic_offline_mode_enabled') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setOfflineModeEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem('liemusic_offline_mode_enabled', enabled ? 'true' : 'false');
+    window.dispatchEvent(new CustomEvent('liemusic_offline_mode_change', { detail: { enabled } }));
+  } catch {}
+}

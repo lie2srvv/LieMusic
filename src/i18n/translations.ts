@@ -170,6 +170,11 @@ export const translations = {
     sortBySizeAsc: 'Сначала легкие (по размеру)',
     sortByName: 'По названию (А–Я)',
     sortByDate: 'Сначала новые',
+    storageUsedByApp: 'Занято аудиофайлами',
+    tracksOnDevice: 'Треков на устройстве',
+    sortBySize: 'По размеру',
+    sortByTitle: 'По названию',
+
 
     // Support & YooMoney
     supportProject: 'Поддержать проект',
@@ -178,6 +183,8 @@ export const translations = {
     donateViaYooMoney: 'Поддержать через ЮMoney',
     enterAmountRub: 'Сумма в ₽',
     minAmountNotice: 'Минимум 10 ₽ для перевода через ЮMoney',
+    supportSubtitle: 'LieMusic создан с душой и остаётся бесплатным без рекламы и подписок',
+
 
     // App Preferences
     preferences: 'Параметры приложения',
@@ -188,6 +195,42 @@ export const translations = {
     openEqualizer: 'Открыть эквалайзер',
     clearHistory: 'Очистить историю прослушиваний',
     historyCleared: 'История очищена',
+
+    offlineModeTitle: 'Офлайн режим',
+    offlineModeSubtitle: 'Полностью отключает интернет-запросы и экономит трафик',
+    offlineModeActiveNotice: 'Включён офлайн режим. Доступны только скачанные треки',
+
+    // Track Metadata Editing
+    editTrack: 'Редактировать трек',
+    editTrackModalTitle: 'Редактирование трека',
+    trackTitleLabel: 'Название трека',
+    trackArtistLabel: 'Исполнитель',
+    trackCoverLabel: 'Обложка трека',
+    changeCoverBtn: 'Выбрать фото из памяти',
+    orEnterImageUrl: 'или вставьте прямую ссылку на картинку',
+    saveMetadataBtn: 'Сохранить изменения',
+    metadataUpdated: 'Метаданные трека сохранены',
+
+    // My Wave
+    myWave: 'Моя волна',
+    myWaveSubtitle: 'Умный бесконечный поток музыки',
+    startWave: 'Запустить волну',
+    stopWave: 'Остановить волну',
+    wavePlaying: 'Волна играет',
+    waveVibeUnderWay: 'Подстраивается под вас',
+    waveMoodSettings: 'Настройка настроения',
+    waveFavoritesMode: 'Любимое',
+    waveDiscoverMode: 'Открытия',
+    waveLangRuEn: 'RU + EN',
+    waveLangRu: 'Только RU',
+    waveLangEn: 'Только EN',
+    waveLangAll: 'Все языки',
+    moodEnergetic: 'ЭНЕРГИЧНОЕ',
+    moodCheerful: 'ВЕСЕЛОЕ',
+    moodCalm: 'СПОКОЙНОЕ',
+    moodSad: 'ГРУСТНОЕ',
+    waveLoadingTracks: 'Подбираем треки под ваш вайб...',
+    addedToUpNext: 'Будет воспроизведено следующим',
 
     // About
     about: 'О приложении',
@@ -366,6 +409,11 @@ export const translations = {
     sortBySizeAsc: 'Lightest first (File size)',
     sortByName: 'By title (A–Z)',
     sortByDate: 'Newest first',
+    storageUsedByApp: 'Used by music files',
+    tracksOnDevice: 'Tracks on device',
+    sortBySize: 'By size',
+    sortByTitle: 'By title',
+
 
     // Support & YooMoney
     supportProject: 'Support Project',
@@ -374,6 +422,8 @@ export const translations = {
     donateViaYooMoney: 'Donate via YooMoney',
     enterAmountRub: 'Amount in ₽',
     minAmountNotice: 'Minimum 10 ₽ for YooMoney transfer',
+    supportSubtitle: 'LieMusic is made with care and remains free with zero ads and subscriptions',
+
 
     // App Preferences
     preferences: 'Preferences',
@@ -384,6 +434,42 @@ export const translations = {
     openEqualizer: 'Open Equalizer',
     clearHistory: 'Clear playback history',
     historyCleared: 'History cleared',
+
+    offlineModeTitle: 'Offline Mode',
+    offlineModeSubtitle: 'Completely disables internet requests and saves mobile traffic',
+    offlineModeActiveNotice: 'Offline mode enabled. Only downloaded tracks available',
+
+    // Track Metadata Editing
+    editTrack: 'Edit track',
+    editTrackModalTitle: 'Edit Track',
+    trackTitleLabel: 'Track title',
+    trackArtistLabel: 'Artist',
+    trackCoverLabel: 'Track cover',
+    changeCoverBtn: 'Choose image from device',
+    orEnterImageUrl: 'or enter direct image URL',
+    saveMetadataBtn: 'Save changes',
+    metadataUpdated: 'Track metadata updated',
+
+    // My Wave
+    myWave: 'My Wave',
+    myWaveSubtitle: 'Smart endless stream of music',
+    startWave: 'Start Wave',
+    stopWave: 'Stop Wave',
+    wavePlaying: 'Wave is playing',
+    waveVibeUnderWay: 'Tuned to your vibe',
+    waveMoodSettings: 'Mood configuration',
+    waveFavoritesMode: 'Favorites',
+    waveDiscoverMode: 'Discoveries',
+    waveLangRuEn: 'RU + EN',
+    waveLangRu: 'Only RU',
+    waveLangEn: 'Only EN',
+    waveLangAll: 'All Languages',
+    moodEnergetic: 'ENERGETIC',
+    moodCheerful: 'CHEERFUL',
+    moodCalm: 'CALM',
+    moodSad: 'SAD',
+    waveLoadingTracks: 'Tuning tracks to your vibe...',
+    addedToUpNext: 'Will play next',
 
     // About
     about: 'About',

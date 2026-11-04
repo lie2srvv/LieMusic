@@ -395,6 +395,25 @@ class AudioEngine {
     }
   }
 
+  public updateTrackMetadata(track: Track) {
+    if (this.currentTrack && this.currentTrack.id === track.id) {
+      this.currentTrack = {
+        ...this.currentTrack,
+        title: track.title,
+        artist: track.artist,
+        thumbnail: track.thumbnail,
+      };
+      this.updateMediaSession();
+      try {
+        (window as any).AndroidMediaNotification?.updateMetadata(
+          track.title,
+          track.artist,
+          track.thumbnail
+        );
+      } catch {}
+    }
+  }
+
   public setActionHandlers(handlers: { onNext?: () => void; onPrev?: () => void }) {
     if (handlers.onNext) {
       this.onNextCallback = handlers.onNext;

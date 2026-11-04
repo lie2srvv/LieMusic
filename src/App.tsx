@@ -26,7 +26,9 @@ import { CreatePlaylistModal } from './components/CreatePlaylistModal';
 import { PlaylistDetailView } from './components/PlaylistDetailView';
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { CellularDownloadModal } from './components/CellularDownloadModal';
-import { isCellularConnection } from './utils/network';
+import { isCellularConnection, isOfflineModeEnabled } from './utils/network';
+import { WaveLanguageFilter } from './services/waveService';
+import { WifiOff } from 'lucide-react';
 import { Track, AudioSource } from './types';
 import { translations, Language } from './i18n/translations';
 import { LanguageSelectModal } from './components/LanguageSelectModal';
@@ -44,6 +46,12 @@ import { TrackListItem } from './components/TrackListItem';
 import { invoke } from '@tauri-apps/api/core';
 import { FoxLogo } from './components/FoxLogo';
 import { getHighResThumbnail } from './utils/thumbnail';
+import { WaveCard } from './components/WaveCard';
+import { EditTrackModal } from './components/EditTrackModal';
+import { waveService } from './services/waveService';
+import { MoodCoordinates } from './components/MoodPad';
+import { saveCustomMetadata, applyCustomMetadataList } from './utils/trackMetadata';
+
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
@@ -56,6 +64,15 @@ export const App: React.FC = () => {
     return !localStorage.getItem('liemusic_language');
   });
   const [activePreset, setActivePreset] = useState<string>('flat');
+  const [isWaveActive, setIsWaveActive] = useState<boolean>(false);
+  const [waveMood, setWaveMood] = useState<MoodCoordinates>({ valence: 0, energy: 0 });
+  const [waveMode, setWaveMode] = useState<'favorites' | 'discover'>('favorites');
+  const [isWaveLoading, setIsWaveLoading] = useState<boolean>(false);
+  const [isEditTrackOpen, setIsEditTrackOpen] = useState<boolean>(false);
+  const [upNextQueue, setUpNextQueue] = useState<Track[]>([]);
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(() => isOfflineModeEnabled());
+  const [waveLanguage, setWaveLanguage] = useState<WaveLanguageFilter>('ru_en');
+
 
   const t = translations[language];
 
@@ -111,6 +128,7 @@ export const App: React.FC = () => {
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const lastErrorRetryTrackId = useRef<string | null>(null);
+  const waveRequestIdRef = useRef<number>(0);
 
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState<boolean>(false);
   const [isEqualizerOpen, setIsEqualizerOpen] = useState<boolean>(false);
@@ -201,6 +219,14 @@ export const App: React.FC = () => {
       (window as any).AndroidMediaNotification?.setBackIntercept(canGoBack);
     } catch {}
   }, [canGoBack]);
+
+  useEffect(() => {
+    const handleOfflineChange = (e: any) => {
+      setIsOfflineMode(Boolean(e.detail?.enabled));
+    };
+    window.addEventListener('liemusic_offline_mode_change', handleOfflineChange);
+    return () => window.removeEventListener('liemusic_offline_mode_change', handleOfflineChange);
+  }, []);
 
   useEffect(() => {
     const handleBackPressed = () => {
@@ -304,7 +330,7 @@ export const App: React.FC = () => {
     if (cachedFavs) {
       try {
         const list: Track[] = JSON.parse(cachedFavs);
-        setFavorites(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) })));
+        setFavorites(applyCustomMetadataList(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) }))));
       } catch {}
     }
 
@@ -312,7 +338,7 @@ export const App: React.FC = () => {
     if (cachedHistory) {
       try {
         const list: Track[] = JSON.parse(cachedHistory);
-        setHistory(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) })));
+        setHistory(applyCustomMetadataList(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) }))));
       } catch {}
     }
 
@@ -320,7 +346,7 @@ export const App: React.FC = () => {
     if (cachedDownloads) {
       try {
         const list: Track[] = JSON.parse(cachedDownloads);
-        setDownloadedTracks(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) })));
+        setDownloadedTracks(applyCustomMetadataList(list.map((t) => ({ ...t, thumbnail: getHighResThumbnail(t.thumbnail) }))));
       } catch {}
     }
   }, []);
@@ -376,12 +402,22 @@ export const App: React.FC = () => {
   );
 
   const handleNextTrack = useCallback(() => {
-    if (!currentTrack || queue.length === 0) return;
+    if (!currentTrack) return;
     if (isRepeat) {
       audioEngine.seek(0);
       audioEngine.togglePlayPause();
       return;
     }
+
+    // 1. Check priority UpNext queue first
+    if (upNextQueue.length > 0) {
+      const nextUpTrack = upNextQueue[0];
+      setUpNextQueue((prev) => prev.slice(1));
+      handlePlayTrack(nextUpTrack);
+      return;
+    }
+
+    if (queue.length === 0) return;
 
     let nextIndex: number;
     if (isShuffle) {
@@ -390,8 +426,141 @@ export const App: React.FC = () => {
       const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
       nextIndex = (currentIndex + 1) % queue.length;
     }
+
+    if (isWaveActive) {
+      waveService.markTrackPlayed(currentTrack.id);
+      const remaining = queue.length - nextIndex;
+      if (remaining <= 3) {
+        waveService
+          .getNextRecommendations({
+            seeds: [currentTrack, ...favorites],
+            favoriteTracks: favorites,
+            mood: waveMood,
+            mode: waveMode,
+            language: waveLanguage,
+            count: 8,
+          })
+          .then((newBatch) => {
+            if (newBatch.length > 0) {
+              setQueue((prev) => [...prev, ...newBatch]);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
     handlePlayTrack(queue[nextIndex]);
-  }, [currentTrack, queue, isRepeat, isShuffle, handlePlayTrack]);
+  }, [currentTrack, queue, upNextQueue, isRepeat, isShuffle, isWaveActive, favorites, waveMood, waveMode, waveLanguage, handlePlayTrack]);
+
+    const handleSaveTrackMetadata = useCallback(
+    ({ title, artist, thumbnail }: { title: string; artist: string; thumbnail?: string }) => {
+      if (!currentTrack) return;
+      saveCustomMetadata(currentTrack.id, { title, artist, thumbnail });
+      const updatedTrack: Track = {
+        ...currentTrack,
+        title,
+        artist,
+        thumbnail: thumbnail || currentTrack.thumbnail,
+      };
+
+      setCurrentTrack(updatedTrack);
+      setQueue((prev) => prev.map((t) => (t.id === currentTrack.id ? updatedTrack : t)));
+      setFavorites((prev) => prev.map((t) => (t.id === currentTrack.id ? updatedTrack : t)));
+      setDownloadedTracks((prev) => prev.map((t) => (t.id === currentTrack.id ? updatedTrack : t)));
+      setHistory((prev) => prev.map((t) => (t.id === currentTrack.id ? updatedTrack : t)));
+      setUserPlaylists((prev) =>
+        prev.map((pl) => ({
+          ...pl,
+          tracks: pl.tracks.map((t) => (t.id === currentTrack.id ? updatedTrack : t)),
+        }))
+      );
+      if (isPlaying) {
+        audioEngine.updateTrackMetadata(updatedTrack);
+      }
+    },
+    [currentTrack, isPlaying]
+  );
+
+  const restartWaveWithParams = useCallback(async (
+    targetMood: MoodCoordinates,
+    targetMode: 'favorites' | 'discover',
+    targetLang: WaveLanguageFilter
+  ) => {
+    setIsWaveActive(true);
+    setIsWaveLoading(true);
+    const reqId = ++waveRequestIdRef.current;
+    try {
+      const seeds = currentTrack ? [currentTrack, ...favorites] : [...favorites, ...history];
+      const recommendations = await waveService.getNextRecommendations({
+        seeds,
+        favoriteTracks: favorites,
+        mood: targetMood,
+        mode: targetMode,
+        language: targetLang,
+        count: 12,
+      });
+
+      // Avoid race conditions if user changed params again while previous request was in flight
+      if (reqId !== waveRequestIdRef.current) return;
+
+      if (recommendations.length > 0) {
+        handlePlayTrack(recommendations[0], recommendations);
+      }
+    } catch (err) {
+      console.warn('[LieMusic] Failed to refresh wave stream:', err);
+    } finally {
+      if (reqId === waveRequestIdRef.current) {
+        setIsWaveLoading(false);
+      }
+    }
+  }, [currentTrack, favorites, history, handlePlayTrack]);
+
+  // Realtime mood coordinate update during drag (does not interrupt playback)
+  const handleWaveMoodChange = useCallback((mood: MoodCoordinates) => {
+    setWaveMood(mood);
+    waveService.setMood(mood);
+  }, []);
+
+  // Triggered when user releases finger / finishes mood selection
+  const handleWaveMoodCommit = useCallback((mood: MoodCoordinates) => {
+    setWaveMood(mood);
+    waveService.setMood(mood);
+    if (isWaveActive) {
+      restartWaveWithParams(mood, waveMode, waveLanguage);
+    }
+  }, [isWaveActive, waveMode, waveLanguage, restartWaveWithParams]);
+
+  const handleWaveModeChange = useCallback((mode: 'favorites' | 'discover') => {
+    setWaveMode(mode);
+    waveService.setMode(mode);
+    if (isWaveActive) {
+      restartWaveWithParams(waveMood, mode, waveLanguage);
+    }
+  }, [isWaveActive, waveMood, waveLanguage, restartWaveWithParams]);
+
+  const handleWaveLanguageChange = useCallback((lang: WaveLanguageFilter) => {
+    setWaveLanguage(lang);
+    waveService.setLanguage(lang);
+    if (isWaveActive) {
+      restartWaveWithParams(waveMood, waveMode, lang);
+    }
+  }, [isWaveActive, waveMood, waveMode, restartWaveWithParams]);
+
+  const handleToggleWave = useCallback(async () => {
+    if (isOfflineMode) return;
+    if (isWaveActive) {
+      if (isPlaying) {
+        audioEngine.pause();
+        setIsPlaying(false);
+      } else {
+        audioEngine.togglePlayPause();
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    restartWaveWithParams(waveMood, waveMode, waveLanguage);
+  }, [isOfflineMode, isWaveActive, isPlaying, waveMood, waveMode, waveLanguage, restartWaveWithParams]);
 
   const handlePrevTrack = useCallback(() => {
     if (!currentTrack || queue.length === 0) return;
@@ -479,6 +648,7 @@ export const App: React.FC = () => {
   };
 
   const requestDownloadTrack = (track: Track) => {
+    if (isOfflineMode) return;
     if (isCellularConnection() && localStorage.getItem('liemusic_allow_cellular_downloads') !== 'true') {
       setCellularPrompt({ tracks: [track] });
       return;
@@ -612,15 +782,14 @@ export const App: React.FC = () => {
   };
 
   const handlePlayNext = (track: Track) => {
-    if (currentTrack) {
-      const curIdx = queue.findIndex((t) => t.id === currentTrack.id);
-      const nextQueue = queue.filter((t) => t.id !== track.id);
-      const targetIdx = curIdx >= 0 ? curIdx + 1 : 0;
-      nextQueue.splice(targetIdx, 0, track);
-      setQueue(nextQueue);
-    } else {
-      handlePlayTrack(track, [track]);
-    }
+    setUpNextQueue((prev) => [...prev.filter((t) => t.id !== track.id), track]);
+    setQueue((prev) => {
+      const curIdx = currentTrack ? prev.findIndex((t) => t.id === currentTrack.id) : -1;
+      const filtered = prev.filter((t) => t.id !== track.id);
+      const insertAt = curIdx >= 0 ? curIdx + 1 : 0;
+      filtered.splice(insertAt, 0, track);
+      return filtered;
+    });
   };
 
   const handleImportLocalFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -726,6 +895,11 @@ export const App: React.FC = () => {
         ? `${cleanTitle} ${cleanArtist}`
         : cleanTitle || cleanArtist;
 
+      if (isOfflineMode) {
+        setSearchResults([]);
+        setIsSearching(false);
+        return;
+      }
       const currentReqId = ++searchRequestId.current;
       setIsSearching(true);
 
@@ -1027,6 +1201,31 @@ export const App: React.FC = () => {
               <Search size={18} className="text-neutral-400" />
               <span className="text-sm text-neutral-400">{t.searchPlaceholder}</span>
             </div>
+
+            {/* Offline Mode Active Banner on Home */}
+            {isOfflineMode && (
+              <div className="flex items-center space-x-2.5 p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 text-xs font-semibold">
+                <WifiOff size={16} className="shrink-0 text-cyan-400" />
+                <span>{t.offlineModeActiveNotice || 'Офлайн режим включён. Доступны только скачанные треки'}</span>
+              </div>
+            )}
+
+            {/* My Wave (Моя волна) with 2D MoodPad */}
+            <WaveCard
+              language={language}
+              isWaveActive={isWaveActive}
+              isPlaying={isPlaying}
+              currentTrack={currentTrack}
+              onToggleWave={handleToggleWave}
+              onMoodChange={handleWaveMoodChange}
+              onMoodCommit={handleWaveMoodCommit}
+              onModeChange={handleWaveModeChange}
+              onLanguageFilterChange={handleWaveLanguageChange}
+              currentMode={waveMode}
+              currentMood={waveMood}
+              currentLanguageFilter={waveLanguage}
+              isLoading={isWaveLoading}
+            />
 
             {/* Quick Access Tiles: Favorites & Offline */}
             <div className="grid grid-cols-2 gap-3">
@@ -1810,6 +2009,7 @@ export const App: React.FC = () => {
         }}
         onOpenEqualizer={() => setIsEqualizerOpen(true)}
         onDownloadTrack={() => currentTrack && requestDownloadTrack(currentTrack)}
+        onOpenEditTrack={() => setIsEditTrackOpen(true)}
       />
 
       <EqualizerModal
@@ -1950,8 +2150,17 @@ export const App: React.FC = () => {
           localStorage.removeItem('liemusic_history');
         }}
         accentColor={palette.accent}
+        isOfflineMode={isOfflineMode}
+        onToggleOfflineMode={(enabled) => setIsOfflineMode(enabled)}
       />
 
+            <EditTrackModal
+        isOpen={isEditTrackOpen}
+        onClose={() => setIsEditTrackOpen(false)}
+        track={currentTrack}
+        language={language}
+        onSave={handleSaveTrackMetadata}
+      />
       <CellularDownloadModal
         isOpen={!!cellularPrompt}
         language={language}

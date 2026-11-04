@@ -13,6 +13,7 @@ import {
   Check,
   Disc3,
   Loader2,
+  Pencil,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Track } from '../types';
@@ -46,6 +47,7 @@ interface FullPlayerProps {
   onToggleRepeat: () => void;
   onOpenEqualizer: () => void;
   onDownloadTrack: () => void;
+  onOpenEditTrack?: () => void;
 }
 
 export const FullPlayer: React.FC<FullPlayerProps> = ({
@@ -71,6 +73,7 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
   onToggleRepeat,
   onOpenEqualizer,
   onDownloadTrack,
+  onOpenEditTrack,
 }) => {
   const t = translations[language];
 
@@ -177,22 +180,35 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                 </span>
               </div>
 
-              <motion.button
-                type="button"
-                onClick={onToggleFavorite}
-                whileTap={{ scale: 1.3 }}
-                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer"
-                title={isFavorite ? t.inFavorites : t.addToFavorites}
-              >
-                <Heart
-                  size={22}
-                  className={
-                    isFavorite
-                      ? 'text-rose-500 fill-rose-500'
-                      : 'text-neutral-400 hover:text-white'
-                  }
-                />
-              </motion.button>
+              {/* Action buttons: Edit Track (Pencil) to the left of Heart */}
+              <div className="flex items-center space-x-1.5">
+                <motion.button
+                  type="button"
+                  onClick={onOpenEditTrack}
+                  whileTap={{ scale: 0.88 }}
+                  className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                  title={t.editTrack || 'Редактировать трек'}
+                >
+                  <Pencil size={18} />
+                </motion.button>
+
+                <motion.button
+                  type="button"
+                  onClick={onToggleFavorite}
+                  whileTap={{ scale: 1.3 }}
+                  className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                  title={isFavorite ? t.inFavorites : t.addToFavorites}
+                >
+                  <Heart
+                    size={22}
+                    className={
+                      isFavorite
+                        ? 'text-rose-500 fill-rose-500'
+                        : 'text-neutral-400 hover:text-white'
+                    }
+                  />
+                </motion.button>
+              </div>
             </div>
           </div>
 
@@ -246,14 +262,6 @@ export const FullPlayer: React.FC<FullPlayerProps> = ({
                   <p className="text-sm text-neutral-400 truncate font-medium">
                     {track.artist}
                   </p>
-                  {track.album && (
-                    <>
-                      <span className="text-neutral-600 text-xs">•</span>
-                      <p className="text-xs text-neutral-500 truncate max-w-[120px]">
-                        {track.album}
-                      </p>
-                    </>
-                  )}
                 </div>
               </div>
 

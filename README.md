@@ -52,9 +52,7 @@ Designed with a **Zero-Server / Local-First** philosophy: all streaming and down
 
 <div align="center">
 
-| Home Screen | Fullscreen Player |
-| :---: | :---: |
-| <img src="assets/screenshots/home.png" width="280" alt="Home Screen" /> | <img src="assets/screenshots/player.png" width="280" alt="Fullscreen Player" /> |
+<img src="assets/screenshots/home.png" width="300" alt="Home Screen" />
 
 </div>
 
@@ -66,7 +64,7 @@ Pre-built, ready-to-install Android packages are available directly from the **[
 
 | Platform | Package Format | Architecture | Download Link |
 | :--- | :--- | :--- | :--- |
-| **Android** | `APK` | `Universal (arm64-v8a + x86_64)` | [**Download LieMusic-v1.0.0.apk**](https://github.com/lie2srvv/LieMusic/releases/latest) |
+| **Android** | `APK` | `Universal (arm64-v8a + x86_64)` | [**Download LieMusic APK**](https://github.com/lie2srvv/LieMusic/releases/latest) |
 
 > [!NOTE]
 > When installing the APK manually outside of an app store, you may need to grant permission to "Install unknown apps" in your Android system security settings.
